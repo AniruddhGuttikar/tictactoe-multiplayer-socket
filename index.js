@@ -23,11 +23,12 @@ server.on('connection', (socket) => {
     socket.on('data', (data) => {
         const {type, message} = JSON.parse(data);
         if (type === "alias") {
+            const playerName = message
+
             if (clients.length < 2) {
                 clients.push(socket);
                 socket.playerSymbol = clients.length === 0 ? "X" : "O"
-            }
-            if (clients.length > 1) {
+            } else {
                 console.error("Room is already full");
                 socket.destroy({
                     type: 'roomFullError',
@@ -35,15 +36,15 @@ server.on('connection', (socket) => {
                 })
                 return
             }
-            socket.playerName = message;
 
-            if (clients.length > 1 && socket.playerName === clients[0].playerName) {
+            if (clients.length > 1 && playerName === clients[0].playerName) {
                 const errorInfo = {
                     type: 'nameError',
                     message: 'please choose a different username'
                 }
                 socket.write(errorInfo)
             } else {
+                socket.playerName = playerName
                 const joinInfo = {
                     type: 'join',
                     user: socket.playerName,
@@ -87,11 +88,13 @@ server.on('connection', (socket) => {
                 handleGameEnd(gameResult)
             } else {
                 console.error("invalid move")
-                socket.write("invalid move - from the server")
+                socket.write({
+                    type: "invalidMoveError",
+                    message: "invalid move",
+                    player: socket.playerName,
+                })
             }
         }
-
- 
     });
 
     // Handle client disconnection
@@ -101,6 +104,10 @@ server.on('connection', (socket) => {
         const index = clients.indexOf(socket);
         if (index !== -1) {
             clients.splice(index, 1);
+        }
+        const closeInfo = {
+            type: "playerLeft",
+            player: socket.playerName
         }
     });
 
@@ -115,29 +122,28 @@ const isValidMove = (row, col) => {
 }
 
 const checkGameResult = () => {
-{        // Check rows
+{        
         for (let i = 0; i < 3; i++) {
             if (gameState[i][0] !== '0' && gameState[i][0] === gameState[i][1] && gameState[i][1] === gameState[i][2]) {
-                return gameState[i][0]; // Return the winning player symbol
+                return gameState[i][0]; 
             }
-        }
+        } 
         
-        // Check columns
         for (let i = 0; i < 3; i++) {
             if (gameState[0][i] !== '0' && gameState[0][i] === gameState[1][i] && gameState[1][i] === gameState[2][i]) {
-                return gameState[0][i]; // Return the winning player symbol
+                return gameState[0][i]; 
             }
         }
         
-        // Check diagonals
         if (gameState[0][0] !== '0' && gameState[0][0] === gameState[1][1] && gameState[1][1] === gameState[2][2]) {
-            return gameState[0][0]; // Return the winning player symbol
+            return gameState[0][0]; 
         }
+
         if (gameState[0][2] !== '0' && gameState[0][2] === gameState[1][1] && gameState[1][1] === gameState[2][0]) {
-            return gameState[0][2]; // Return the winning player symbol
+            return gameState[0][2]; 
         }
         
-        // Check for draw
+        
         let isDraw = true;
         for (let i = 0; i < 3; i++) {
             for (let j = 0; j < 3; j++) {
@@ -151,10 +157,10 @@ const checkGameResult = () => {
             }
         }
         if (isDraw) {
-            return 'draw'; // Return 'draw' if the game ended in a draw
+            return 'draw'; 
         }
         
-        return 'ongoing';} // Return 'ongoing' if the game is still in progress
+        return 'ongoing';} 
     
 }
 const broadcastGameState = (row, col, playerSymbol) => {
