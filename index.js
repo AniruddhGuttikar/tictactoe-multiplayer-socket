@@ -17,6 +17,10 @@ const gameState = [
 // Handle new connections
 server.on('connection', (socket) => {
     //console.log('A new client connected:', socket.remoteAddress);
+    const aliasMessage = {
+        type: 'alias',
+        message: 'enter the username'
+    }
     socket.write('alias');
 
     // Handle data from clients
@@ -42,7 +46,7 @@ server.on('connection', (socket) => {
                     type: 'nameError',
                     message: 'please choose a different username'
                 }
-                socket.write(errorInfo)
+                socket.write(JSON.stringify(errorInfo))
             } else {
                 socket.playerName = playerName
                 const joinInfo = {
@@ -52,7 +56,7 @@ server.on('connection', (socket) => {
                 console.log(`${socket.playerName} has joined the game`)
                 clients.forEach(client => {
                     if (client !== socket && !client.destroyed) {
-                        client.write(joinInfo)
+                        client.write(JSON.stringify(joinInfo))
                     }
                 })
             }
@@ -68,7 +72,7 @@ server.on('connection', (socket) => {
 
             clients.forEach((client) => {
                 if (client !== socket && !client.destroyed) {
-                    client.write(chatData);
+                    client.write(JSON.stringify(chatData));
                 }
             });
             console.log(`${socket.playerName}: ${message}`)
@@ -88,11 +92,12 @@ server.on('connection', (socket) => {
                 handleGameEnd(gameResult)
             } else {
                 console.error("invalid move")
-                socket.write({
+                const invalidMoveError = {
                     type: "invalidMoveError",
                     message: "invalid move",
                     player: socket.playerName,
-                })
+                }
+                socket.write(JSON.stringify(invalidMoveError))
             }
         }
     });
@@ -172,7 +177,7 @@ const broadcastGameState = (row, col, playerSymbol) => {
     };
     clients.forEach((client) => {
         if (!client.destroyed) {
-            client.write(gameStateMsg);
+            client.write(JSON.stringify(gameStateMsg));
         }
     });
 }
@@ -184,7 +189,7 @@ const handleGameEnd = (result) => {
     }
     clients.forEach(client => {
         if (!client.destroyed) {
-            client.write(endMsg)
+            client.write(JSON.stringify(endMsg))
         }
     })
     resetGame()
