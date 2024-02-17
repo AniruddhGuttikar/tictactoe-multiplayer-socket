@@ -1,0 +1,30 @@
+on joining
+socket.write('alias?');
+
+
+when a player joins
+const joinInfo = {
+                type: 'join',
+                user: socket.playerName,
+            }
+
+chat data format
+const chatData = {
+                type: "chat",
+                user: socket.playerName,
+                message,
+            }
+
+after every move
+    const gameStateMsg = {
+        type: "move",
+        playerSymbol,
+        row,
+        col, 
+    };
+
+after the game ends
+    const endMsg = {
+        type: "gameEnd",
+        result, (contains player symbol)
+    }

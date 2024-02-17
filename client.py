@@ -38,7 +38,7 @@ class TicTacToeGame:
         self.alias = ""
 
         self.entry_alias = tk.Entry(self.window, width=30, font=('Arial', 14))
-        sp.speech("Enter alais name here and press start to start the game")
+        sp.speech("Enter alias name here and press start to start the game")
         self.entry_alias.insert(0, 'Enter Alias Name')  # Placeholder text
         self.entry_alias.bind("<FocusIn>", self.clear_placeholder)
         self.entry_alias.bind("<FocusOut>", self.restore_placeholder)
@@ -50,7 +50,7 @@ class TicTacToeGame:
     
     def alias_enter(self):
         self.alias = self.entry_alias.get()
-        msg=json.loads(self.client.recv(1024).decode('utf-6'))
+        msg=json.loads(self.client.recv(1024).decode('utf-8'))
         if self.alias == "" :
             messagebox.showwarning('Empty Alias', 'Please enter an alias.')
             return

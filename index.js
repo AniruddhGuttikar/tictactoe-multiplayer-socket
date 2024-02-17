@@ -21,7 +21,7 @@ server.on('connection', (socket) => {
         type: 'alias',
         message: 'enter the username'
     }
-    socket.write('alias');
+    socket.write(JSON.stringify(aliasMessage));
 
     // Handle data from clients
     socket.on('data', (data) => {
