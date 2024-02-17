@@ -19,7 +19,7 @@ const gameState = [
 
 // Handle new connections
 server.on('connection', (socket) => {
-    //console.log('A new client connected:', socket.remoteAddress);
+    
     const aliasMessage = {
         type: 'alias',
         message: 'enter the username'
@@ -103,11 +103,46 @@ server.on('connection', (socket) => {
                 socket.write(JSON.stringify(invalidMoveError))
             }
         }
+        if (type === "restart") {
+            const isRestart = message;
+            socket.isRestart = isRestart === '1' ? true : false;
+            if (socket.isRestart === false) {
+                const index = clients.indexOf(socket);
+                socket.destroy()
+                if (index !== -1) {
+                    clients.splice(index, 1);
+                }
+            }
+            const allPlayersReady = clients.every(client => client.isRestart)
+            if (allPlayersReady && clients.length === 2) {
+                console.log("Restarting the game")
+                const restartInfo = {
+                    type: 'restart',
+                    message: '1',
+                }
+                clients.forEach(client => {
+                    if (!client.destroyed) {
+                        socket.write(JSON.stringify(restartInfo));
+                    }
+                })
+            } else {
+                console.log("can't restart the game yet")
+                const restartInfo = {
+                    type: 'restart',
+                    message: '0',
+                }
+                clients.forEach(client => {
+                    if (!client.destroyed) {
+                        socket.write(JSON.parse(restartInfo))
+                    }
+                })
+            }
+        }
     });
 
     // Handle client disconnection
     socket.on('close', () => {
-        console.log('A client disconnected:', socket.remoteAddress);
+        console.log(`${socket.playerName} has disconnected`);
         // Remove the client from the list
         const index = clients.indexOf(socket);
         if (index !== -1) {
@@ -116,6 +151,9 @@ server.on('connection', (socket) => {
         const closeInfo = {
             type: "playerLeft",
             player: socket.playerName
+        }
+        if (clients.length) {
+            clients[0].write(JSON.stringify(closeInfo))
         }
     });
 
@@ -196,6 +234,7 @@ const handleGameEnd = (result) => {
         }
     })
     resetGame()
+
 }
 
 const resetGame = () => {
@@ -204,7 +243,7 @@ const resetGame = () => {
             gameState[i][j] = '0';
         }
     }
-    clients.length = 0;
+    //clients.length = 0;
 }
 
 // Start the server
