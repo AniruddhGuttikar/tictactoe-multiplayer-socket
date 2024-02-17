@@ -58,7 +58,7 @@ server.on('connection', (socket) => {
                 }
                 console.log(`${socket.playerName} has joined the game`)
                 clients.forEach(client => {
-                    if (client !== socket && !client.destroyed) {
+                    if (!client.destroyed) {
                         client.write(JSON.stringify(joinInfo))
                     }
                 })
