@@ -36,9 +36,9 @@ class TicTacToeGame:
     #creation of main page
     def create_main_page(self):
         self.alias = ""
-
+        self.client.recv(1024).decode('utf-8')
         self.entry_alias = tk.Entry(self.window, width=30, font=('Arial', 14))
-        sp.speech("Enter alias name here and press start to start the game")
+        sp.speech("Enter alais name here and press start to start the game")
         self.entry_alias.insert(0, 'Enter Alias Name')  # Placeholder text
         self.entry_alias.bind("<FocusIn>", self.clear_placeholder)
         self.entry_alias.bind("<FocusOut>", self.restore_placeholder)
@@ -49,39 +49,43 @@ class TicTacToeGame:
 
     
     def alias_enter(self):
-        self.alias = self.entry_alias.get()
-        msg=json.loads(self.client.recv(1024).decode('utf-8'))
-        if self.alias == "" :
-            messagebox.showwarning('Empty Alias', 'Please enter an alias.')
-            return
+        try:
+            self.alias = self.entry_alias.get()
+            if self.alias == "" :
+                messagebox.showwarning('Empty Alias', 'Please enter an alias.')
+                return
 
-        self.client.send(json.dumps({'type': 'alias', 'name': self.alias}).encode('utf-8'))
+            self.client.send(json.dumps({'type': 'alias', 'message': self.alias}).encode('utf-8'))
+            print("message sent")
+            response = json.loads(self.client.recv(1024).decode('utf-8'))
+            print("im here..")
+            if response['type'] != 'nameError':
+                print("creating threads...")
+                create_board_thread = threading.Thread(target=self.create_board)
+                update_board_thread = threading.Thread(target=self.update_board)
+                client_receive_thread = threading.Thread(target=self.client_recieve)
+                errors_thread = threading.Thread(target=self.errors)
 
-        response = json.loads(self.client.recv(1024).decode('utf-8'))
-        if response['type'] != 'nameError':
-            create_board_thread = threading.Thread(target=self.create_board)
-            update_board_thread = threading.Thread(target=self.update_board)
-            client_receive_thread = threading.Thread(target=self.client_recieve)
-            client_send_thread = threading.Thread(target=self.client_send)
+                create_board_thread.start()
+                update_board_thread.start()
+                client_receive_thread.start()
+                errors_thread.start()
 
-            create_board_thread.start()
-            update_board_thread.start()
-            client_receive_thread.start()
-            client_send_thread.start()
+                create_board_thread.join()
+                update_board_thread.join()
+                client_receive_thread.join()
+                errors_thread.join()
 
-            create_board_thread.join()
-            update_board_thread.join()
-            client_receive_thread.join()
-            client_send_thread.join()
+                self.entry_alias.delete(0, tk.END)
+                self.start_button.pack_forget()
+                self.entry_alias.pack_forget()
+            else:
+                messagebox.showwarning('Same Name', 'Please choose a different name')
+                sp.speech("hey buddy u cannt have same name as opponent")
 
-            self.entry_alias.delete(0, tk.END)
-            self.start_button.pack_forget()
-            self.entry_alias.pack_forget()
-        else:
-            messagebox.showwarning('Same Name', 'Please choose a different name')
-            sp.speech("hey buddy u cannt have same name as opponent")
-
-            self.create_main_page()
+                self.create_main_page()
+        except:
+            print("some issue")        
 
 #-------------------------------------------------------------------------------------------------------------------------------#
 
@@ -100,7 +104,7 @@ class TicTacToeGame:
                 button.grid(row=i + 1, column=j, sticky="nsew")
                 row_but.append(button)
             self.buttons.append(row_but)
-        self.create_chatroom()    
+        self.create_chatroom(self.window)    
 
         opponent = json.loads(self.client.recv(1024).decode('utf-8'))['alias']
         messagebox.showinfo('info', f'You are playing with {opponent}')
@@ -134,7 +138,7 @@ class TicTacToeGame:
                     for i in range(3):
                         for j in range(3):
                             self.buttons[i][j]['state'].configure(state='disabled')
-                    flag+=1
+                    self.flag+=1
                     #disable the button 
                 elif data['type']=='gameEnd':
                     if data['result']==self.alias:
@@ -296,7 +300,7 @@ class TicTacToeGame:
     def reset(self):
         self.client.send(json.dumps({'type':'reset','alias':self.alias}).encode('utf-8'))
         time.sleep(1)
-        res=self.cient.recv(1024).decode('utf-8')
+        res = self.client.recv(1024).decode('utf-8')
         data=json.loads(res)
         if(data['val']=='1'):
             for i in range(3):
@@ -305,7 +309,9 @@ class TicTacToeGame:
             self.l = []
         else:
             messagebox.showinfo('restart', 'opponent rejected to restart')    
-    
+        
+
+
 
 if __name__ == "__main__":
     game = TicTacToeGame()
