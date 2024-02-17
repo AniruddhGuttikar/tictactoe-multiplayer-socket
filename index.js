@@ -1,7 +1,10 @@
-const net = require('net');
+import net from 'net'
+import dotenv from 'dotenv'
 
-const PORT = 3000; // Choose a port for the server
-const HOST = '0.0.0.0'; // Listen on all network interfaces
+dotenv.config()
+
+const PORT = process.env.PORT; // Choose a port for the server
+const HOST = process.env.HOST; // Listen on all network interfaces
 
 // Create a TCP server
 const server = net.createServer();
