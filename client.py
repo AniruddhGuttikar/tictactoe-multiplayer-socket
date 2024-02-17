@@ -4,192 +4,308 @@ import tkinter as tk
 from tkinter import messagebox
 import json
 import time
+import speech as sp
 
-window = tk.Tk()
-window.title("Tic Tac Toe")
-buttons=[]
-l=[]
-# Create board
-client=socket.socket(socket.AF_INET,socket.SOCK_STREAM)
-host=socket.gethostname()
-print(socket.gethostbyname(host))
-flag=0
-alias=""
-#connect client to server here
-client.connect((host,3000))
+class TicTacToeGame:
+    def __init__(self):
+        self.window = tk.Tk()
+        self.window.title("Tic Tac Toe")
+        self.buttons = []
+        self.l = []
 
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.host = socket.gethostname()
+        self.flag = 0
+        self.alias = ""
+        self.client.connect((self.host, 3000))
 
-#create a function asking for alias name enter
-#inside that initialise thread and everything use class
+        self.create_main_page()
 
-def reset_board():
-    for i in range(3):
-        for j in range(3):
-            buttons[i][j].config(text="", state=tk.NORMAL)
-    l=[]        
+        self.window.protocol("WM_DELETE_WINDOW", self.on_exit)
+        self.window.mainloop()
+        sp.speech("welcome to the game buddy")
 
-def handle_click(row,col):
-    if buttons[row][col]['state']=='normal':
-        d={'type:':'game','message':{'row':str(row),'column':str(col)}}
-        json_data=json.dumps(d)
-        print(json_data)
-        client.send(json_data.encode('utf-8'))   #json data is passed to the server: (can server know my name???)
-        time.sleep(0.2)
-        l.append([row,col])
+    def clear_placeholder(self, event):
+        if self.entry_alias.get() == 'Enter Alias Name':
+            self.entry_alias.delete(0, tk.END)
 
-        #print the server response:
-        try:
-            message=client.recv(1024).decode('utf-8')
-            data=json.loads(message)
-            if data['type']=='game':
-                if data['playerSymbol']=='X':
-                    color='red'
-                else:
-                    color='blue'
-                buttons[int(data['row'])][int(data['col'])].config(text=data['playerSymbol'], fg=color)
-                for i in range(3):
-                    for j in range(3):
-                        buttons[i][j]['state'].configure(state='disabled')
-                flag+=1
-                #disable the button 
-            elif data['type']=='gameEnd':
-                if data['result']==alias:
-                    messagebox.showinfo("Congradulations","You won :)")
-                    reset_board()
-                    print()  
-                else:
-                    messagebox.showinfo("oops!!   u Lost") 
-                    reset_board()
-        except:
-            print('Error!')
-            client.close()
-    else:
-        messagebox.showwarning('warning','sorry pal you cant click this other payer needs to play!')        
+    def restore_placeholder(self, event):
+        if not self.entry_alias.get():
+            self.entry_alias.insert(0, 'Enter Alias Name')
+
+    #creation of main page
+    def create_main_page(self):
+        self.alias = ""
+
+        self.entry_alias = tk.Entry(self.window, width=30, font=('Arial', 14))
+        sp.speech("Enter alais name here and press start to start the game")
+        self.entry_alias.insert(0, 'Enter Alias Name')  # Placeholder text
+        self.entry_alias.bind("<FocusIn>", self.clear_placeholder)
+        self.entry_alias.bind("<FocusOut>", self.restore_placeholder)
+        self.entry_alias.pack(pady=50, padx=30)
+
+        start_button = tk.Button(self.window, text="Start", command=self.alias_enter, bg='#7CFC00', fg='white', font=('Arial', 14))
+        start_button.pack(pady=10)
+
     
+    def alias_enter(self):
+        self.alias = self.entry_alias.get()
+        msg=json.loads(self.client.recv(1024).decode('utf-6'))
+        if self.alias == "" :
+            messagebox.showwarning('Empty Alias', 'Please enter an alias.')
+            return
 
-def create_board():
-    for i in range(3):
-        row_but=[]
-        for j in range(3):
-           
-            button = tk.Button(window, text="", font=("Arial", 50), anchor="center",  height=2, width=6, bg="lightblue", command=lambda row=i, col=j: handle_click(row, col))
-            button.grid(row=i, column=j, sticky="nsew")
-            row_but.append(button)
-        buttons.append(row_but)
-    opponent=json.loads(client.recv(1024).decode('utf-8'))['alias']
-    messagebox.showinfo('info',f'you are playing with ${opponent}')
+        self.client.send(json.dumps({'type': 'alias', 'name': self.alias}).encode('utf-8'))
 
-def update_board():
-    while True:
-        if flag%2 ==1:
+        response = json.loads(self.client.recv(1024).decode('utf-8'))
+        if response['type'] != 'nameError':
+            create_board_thread = threading.Thread(target=self.create_board)
+            update_board_thread = threading.Thread(target=self.update_board)
+            client_receive_thread = threading.Thread(target=self.client_recieve)
+            client_send_thread = threading.Thread(target=self.client_send)
+
+            create_board_thread.start()
+            update_board_thread.start()
+            client_receive_thread.start()
+            client_send_thread.start()
+
+            create_board_thread.join()
+            update_board_thread.join()
+            client_receive_thread.join()
+            client_send_thread.join()
+
+            self.entry_alias.delete(0, tk.END)
+            self.start_button.pack_forget()
+            self.entry_alias.pack_forget()
+        else:
+            messagebox.showwarning('Same Name', 'Please choose a different name')
+            sp.speech("hey buddy u cannt have same name as opponent")
+
+            self.create_main_page()
+
+#-------------------------------------------------------------------------------------------------------------------------------#
+
+    #playig area
+    def create_board(self):
+        self.alias_label = tk.Label(self.window, text=f'Your Alias: {self.alias}', font=('Arial', 12))   #your name 
+        self.alias_label.grid(row=0, column=1, pady=(0, 10), sticky="nsew")
+
+        self.opponent_label = tk.Label(self.window, text=f'Opponent: {self.opponent}', font=('Arial', 12))   #name of the opponent
+        self.opponent_label.grid(row=4, column=1, pady=(10, 0), sticky="nsew")
+
+        for i in range(3):
+            row_but = []
+            for j in range(3):
+                button = tk.Button(self.window, text="", font=("Arial", 50), anchor="center", height=2, width=6, bg="lightblue", command=lambda row=i, col=j: self.handle_click(row, col))
+                button.grid(row=i + 1, column=j, sticky="nsew")
+                row_but.append(button)
+            self.buttons.append(row_but)
+        self.create_chatroom()    
+
+        opponent = json.loads(self.client.recv(1024).decode('utf-8'))['alias']
+        messagebox.showinfo('info', f'You are playing with {opponent}')
+
+        exit_button = tk.Button(self.window, text="Exit", command=self.on_exit, bg='#FF0000', fg='white', font=('Arial', 12))
+        exit_button.grid(row=6, column=0, pady=10, padx=5, sticky="nsew")
+
+        reset_button = tk.Button(self.window, text="Reset", command=self.reset, bg='#FFD700', fg='black', font=('Arial', 12))
+        reset_button.grid(row=6, column=2, pady=10, padx=5, sticky="nsew")
+
+
+    def handle_click(self,row,col):
+        if self.buttons[row][col]['state']=='normal':
+            d={'type:':'game','message':{'row':str(row),'column':str(col)}}
+            json_data=json.dumps(d)
+            print(json_data)
+            self.client.send(json_data.encode('utf-8'))   #json data is passed to the server: (can server know my name???)
+            time.sleep(0.2)
+            self.l.append([row,col])
+
+            #print the server response:
             try:
-                message=client.recv(1024).decode('utf-8')
-                #here try to updae so that client2 responce is taken...
-                for i in range(3):
-                    for j in range(3):
-                        if [i,j] not in l:
-                            buttons[i][j]['state'].configure(state='normal')
+                message=self.client.recv(1024).decode('utf-8')
                 data=json.loads(message)
-                if data['type']=="game":
+                if data['type']=='game':
                     if data['playerSymbol']=='X':
                         color='red'
                     else:
                         color='blue'
-
-                    buttons[int(data['row'])][int(data['col'])].config(text=data['playerSymbol'], fg=color)
-                    flag+=1                #disable the button 
+                    self.buttons[int(data['row'])][int(data['col'])].config(text=data['playerSymbol'], fg=color)
+                    for i in range(3):
+                        for j in range(3):
+                            self.buttons[i][j]['state'].configure(state='disabled')
+                    flag+=1
+                    #disable the button 
                 elif data['type']=='gameEnd':
-                    if data['result']==alias:
+                    if data['result']==self.alias:
                         messagebox.showinfo("Congradulations","You won :)")
-                        reset_board()
+                        time.sleep(2)
+                        self.reset_board()
                         print()  
                     else:
                         messagebox.showinfo("oops!!   u Lost") 
-                        reset_board()
+                        self.reset_board()
+                else:
+                    self.fl.pop()       
             except:
-                print("something went wrong")    
+                print('Error!')
+                self.client.close()
+        else:
+            messagebox.showwarning('warning','sorry pal you cant click this other payer needs to play!') 
+            sp.speech("sorry pal you cant click this other payer needs to play")
+       
 
 
-#hetr do the ssme for char room
-def client_recieve():
-    while True:
-        try:
-            message=client.recv(1024).decode('utf-8')
-            data=json.loads(message)
-            if data['type']=='alias':
-                client.send(json.dumps({'type':'alias','message':alias}).encode('utf-8'))
-            elif data['type'=='chat']:
-                print(data['message'])  #make it print in chatbot gui
-        except:
-            print('Error!')
-            client.close()
-            break
+    def update_board(self):
+        while True:
+            if self.flag % 2 == 1:
+                try:
+                    message = self.client.recv(1024).decode('utf-8')
+                    for i in range(3):
+                        for j in range(3):
+                            if [i, j] not in self.l:
+                                self.buttons[i][j]['state'].configure(state='normal')
+                    data = json.loads(message)
+                    if data['type'] == "game":
+                        if data['playerSymbol'] == 'X':
+                            color = 'red'
+                        else:
+                            color = 'blue'
+                        self.buttons[int(data['row'])][int(data['col'])].config(text=data['playerSymbol'], fg=color)
+                        self.flag += 1
+                    elif data['type'] == 'gameEnd':
+                        if data['result'] == self.alias:
+                            messagebox.showinfo("Congratulations", "You won :)")
+                            sp.praise("Congradulations you won")
+                            self.reset_board()
+                        else:
+                            messagebox.showinfo("Oops!!   You Lost")
+                            sp.con("Oops you lost it better luck next time")
+                            self.reset_board()
+                except:
+                    print("Something went wrong")
 
-def client_send():
-    while True:
-        message=f'{alias}: {input("")}'   #take the input from textbox of chat gui
 
-        client.send(json.encode('utf-8'))
-def restart():
-    messagebox.showwarning('confirm to restart')
+#-------------------------------------------------------------------------------------------------------------------------------#
 
-def errors():
-    while True:
-        try:
-            data=json.loads(client.recv(1024).decode('utf-8'))
-            if(data['type']=='exit'):
-                messagebox.showinfo('player left','opponent left the game')
-            elif(data['type']=='noPlayer'):
-                messagebox.showwarning('wait pal, ', 'Hey buddy wait for player2 to join')
 
-        except:
-            print()
+    #chat room
+    def create_chatroom(self,master):
+        self.master = master
+        master.title("Chat Room")
+        master.configure(bg='#115C54')  # Set background color
+        # Create frame for right half
+        self.right_frame = tk.Frame(master, bg='#115C54')
+        self.right_frame.pack(side=tk.RIGHT, padx=10, pady=10)
+        # Create text widget for displaying chat messages
+        self.chat_display = tk.Text(self.right_frame, state='disabled', width=40, height=20, bg='white')    
+        self.chat_display.pack(padx=10, pady=10)
+        # Create entry widget for typing messages
+        self.message_entry = tk.Entry(self.right_frame, width=40)
+        self.message_entry.insert(0, "Type a message")
+        self.message_entry.bind("<FocusIn>", self.on_entry_click)
+        self.message_entry.bind("<FocusOut>", self.on_focus_out)
+        self.message_entry.pack(padx=10, pady=5)
+        self.message_entry.bind("<Return>", self.send_message_enter)  # Bind Enter key event
+        # Create send button
+        self.send_button = tk.Button(self.right_frame, text="Send", command=self.send_message, bg='#3B945E', fg='white')
+        self.send_button.pack(side=tk.RIGHT,padx=10, pady=5)
         
-def alias_enter():
-    global alias
-  #input alias name from a label and send it to server
-    while True:
-        if(alias==""):
-            alias=input("alais:>>")
-            #input alias name in gui
-            client.send(json.dumps({'type':'alias','name':alias}).encode('utf-8'))
-            if(json.loads(client.recv(1024).decode('utf-8'))['ok']=='1'):
-                    threading.Thread(target=create_board).start()
-                    threading.Thread(target=update_board).start()
-                    threading.Thread(target=client_recieve).start()
-                    threading.Thread(target=client_send).start()
-            else:
-                messagebox.showwarning('same name','same name plz choose some other name')
+    def send_message(self, event=None):  # event argument is for binding to <Button-1>
+        message = self.message_entry.get().strip()
+        if message:
+            self.client.send(json.dumps({'type':'chat','message':message}).encode('utf-8'))
+            self.display_message(f"You: {message}\n")
+            self.message_entry.delete(0, tk.END)
 
-def stop_all_threads():
-    """Stop all active threads."""
-    for thread in threading.enumerate():
-        if thread.is_alive():
-            thread.join()
-          
-def on_exit():
-    result = messagebox.askyesno("Exit", "Are you sure you want to exit?")
-    if result:
-        client.send(json.dumps({'type':'exit','alias':alias}).encode('utf-8'))
-        #if required print exiting in 3 2 1 then exit
-        window.destroy()
-        exit(0)
+    def send_message_enter(self, event):
+        self.send_message()
 
-def mainpage():
-  alias=""
-  #cre	te gui for start button and call alias_enter function
-  #stop_all_threads()
-  #ask here to enter the alias
-  alias_enter()
+    def on_entry_click(self, event):
+        if self.message_entry.get() == "Type a message":
+            self.message_entry.delete(0, "end")
+            self.message_entry.config(fg="black")
 
-mainpage()
-                      
+    def on_focus_out(self, event):
+        if self.message_entry.get() == "":
+            self.message_entry.insert(0, "Type a message")
+            self.message_entry.config(fg="grey")    
+
+    def display_message(self, message):
+        self.chat_display.config(state='normal')
+        self.chat_display.insert(tk.END, message)
+        self.chat_display.config(state='disabled')
+        self.chat_display.see(tk.END)  # Scroll to the bottom
 
 
-window.protocol("WM_DELETE_WINDOW", on_exit)
+    def client_recieve(self):
+        while True:
+            try:
+                message = self.client.recv(1024).decode('utf-8')
+                data = json.loads(message)
+                if data['type'] == 'chat':
+                    print(data['message'])  # Make it print in chatbot gui
+                    self.display_message(f"{data['users']}: {data['message']}\n")
+            except:
+                print('Error!')
+                self.client.close()
+                break            
+
+#-------------------------------------------------------------------------------------------------------------------------------#
+    #exit and reset querries
+    def on_exit(self):
+        result = messagebox.askyesno("Exit", "Are you sure you want to exit?")
+        if result:
+            self.client.send(json.dumps({'type': 'exit', 'alias': self.alias}).encode('utf-8'))
+            self.window.destroy()
+            exit(0)
+
+    def errors(self):
+        while True:
+            try:
+                data=json.loads(self.client.recv(1024).decode('utf-8'))
+                if(data['type']=='exit'):
+                    messagebox.showinfo('player left','opponent left the game')
+                elif(data['type']=='noPlayer'):
+                    messagebox.showwarning('wait pal, ', 'Hey buddy wait for player2 to join')
+                elif(data['type']=='restart'):
+                    res=messagebox.askyesno('restart','opponent req for a restart. ')
+                    if(res):
+                        self.client.send(json.dumps({'type':'restart','val':'1'}).encode('utf-8'))
+                    else:
+                        self.client.send(json.dumps({'type':'restart','val':'0'}).encode('utf-8'))  
+                elif(data['type']=="join"):
+                    messagebox.showinfo('joined','opponent '+data['user']+' joined the game')          
+            except:
+                print("something went wrong")        
 
 
-window.mainloop()
-''' todo list:
-1.create a a reset button that resets the page
-2.create a exit button when clicked call a function which removes all thread and caals mainpage()'''
+    def stop_all_threads(self):
+        """Stop all active threads."""
+        for thread in threading.enumerate():
+            if thread.is_alive():
+                thread.join()
+
+    def reset_board(self):
+        time.sleep(2)
+        for i in range(3):
+            for j in range(3):
+                self.buttons[i][j].config(text="", state=tk.NORMAL)
+        self.l = []
+
+    def reset(self):
+        self.client.send(json.dumps({'type':'reset','alias':self.alias}).encode('utf-8'))
+        time.sleep(1)
+        res=self.cient.recv(1024).decode('utf-8')
+        data=json.loads(res)
+        if(data['val']=='1'):
+            for i in range(3):
+                for j in range(3):
+                    self.buttons[i][j].config(text="", state=tk.NORMAL)
+            self.l = []
+        else:
+            messagebox.showinfo('restart', 'opponent rejected to restart')    
+    
+
+if __name__ == "__main__":
+    game = TicTacToeGame()
