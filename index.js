@@ -224,9 +224,19 @@ const broadcastGameState = (row, col, playerSymbol) => {
 }
 
 const handleGameEnd = (result) => {
+    let winAlias = null
+    let draw = true
+    clients.forEach(client => {
+        if (client.playerSymbol === result) {
+            winAlias = client.playerName
+            draw = false
+        }
+    })
+    
     const endMsg = {
         type: "gameEnd",
-        result,
+        draw, 
+        winAlias,
     }
     clients.forEach(client => {
         if (!client.destroyed) {
