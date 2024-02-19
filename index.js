@@ -18,7 +18,7 @@ const gameState = [
 ];
 
 // Handle new connections
-server.on('connection', (socket) => {
+server.on('connection', async (socket) => {
     
     const aliasMessage = {
         type: 'alias',
@@ -27,8 +27,9 @@ server.on('connection', (socket) => {
     socket.write(JSON.stringify(aliasMessage));
 
     // Handle data from clients
-    socket.on('data', (data) => {
+    socket.on('data', async (data) => {
         const {type, message} = JSON.parse(data);
+
         if (type === "alias") {
             const playerName = message
 
@@ -57,13 +58,20 @@ server.on('connection', (socket) => {
                     user: socket.playerName,
                 }
                 console.log(`${socket.playerName} has joined the game`)
-                clients.forEach(client => {
+                clients.forEach(async (client) => {
                     if (!client.destroyed) {
-                        client.write(JSON.stringify(joinInfo))
+                        await client.write(JSON.stringify(joinInfo))
+                        console.log(`sedning .... ${client.playerName} first time`)
                     }
                 })
+                if (clients.length === 2) {
+                    clients[1].write(JSON.stringify({
+                        type: 'join',
+                        user: clients[0].playerName,
+                    }))
+                    console.log(`sending ${clients[1].playerName} second time`)
+                }
             }
-
         }
 
         if (type === "chat") {
