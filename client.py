@@ -1,4 +1,3 @@
-
 import socket 
 import tkinter as tk
 from tkinter import messagebox
@@ -11,25 +10,34 @@ class TicTacToeGame:
     def __init__(self):
         self.window = tk.Tk()
         self.window.title("Tic Tac Toe")
-        self.window.geometry("1280x720")
-        #self.window.resizable(False,False)
+        self.window.geometry("1280x760")
+        self.window.resizable(False,False)
         self.buttons = []
         self.l = []
-
+        self.nameLabel=tk.Label()
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.host = socket.gethostname()
         ip=socket.gethostbyname(self.host)
-
         print(ip)
-        self.flag = 0
+        self.flag = False
         self.alias = ""
-        self.client.connect(('192.168.13.241', 3000))
+        while True:
+            try:
+                self.client.connect((ip, 3000))
+                break  # Connection successful, exit the loop
+            except OSError as e:
+                if e.errno == 10035:  # Check for [WinError 10035]
+                    # Connection is still in progress, wait and retry
+                    time.sleep(1)
+                else:
+                    # Handle other socket-related errors
+                    print(f"Error: {e}")
+                    break  # Terminate the loop in case of other errors
         self.opponent=""
         self.create_main_page()
 
         self.window.protocol("WM_DELETE_WINDOW", self.on_exit)
         self.window.mainloop()
-        
 
     def clear_placeholder(self, event):
         if self.entry_alias.get() == 'Enter Alias Name':
@@ -42,7 +50,7 @@ class TicTacToeGame:
     #creation of main page
     def create_main_page(self):
         sp.speech("Welcome to the game buddy")
-        time.sleep(2)
+        time.sleep(1)
         self.alias = ""
         data = self.client.recv(1024).decode('utf-8')
         print(json.loads(data))
@@ -90,8 +98,6 @@ class TicTacToeGame:
                 self.entry_alias.destroy()
                 self.start_button.destroy()
 
-
-
                 def process():
                     try:
                         # Set the socket to non-blocking mode
@@ -103,12 +109,13 @@ class TicTacToeGame:
                                 self.data += chunk
                         except BlockingIOError:
                             pass 
-                        print(self.data)
                         if self.data:
                             msg = self.data.decode('utf-8')
                             self.data = json.loads(msg)
-                            print("data is",self.data)
                             if self.data['type'] == 'join':
+                                print("here",self.data)
+                                if self.data['playerSymbol']!="X":
+                                    self.flag=True
                                 print("opponent is ", self.data['user'])
                                 self.opponent += self.data['user']
                                 self.window.after(0, self.create_board)
@@ -133,7 +140,6 @@ class TicTacToeGame:
        
 
 #-------------------------------------------------------------------------------------------------------------------------------#
-
     #playig area
     def create_board(self):
         try:
@@ -148,12 +154,15 @@ class TicTacToeGame:
             self.alias_label = tk.Label(self.window, text=f'Your Alias: {self.alias}', font=('Arial', 12))
             self.alias_label.grid(row=0, column=1, pady=(0, 10), sticky="nsew")
             self.opponent_label = tk.Label(self.window, text=f'Opponent: {self.opponent}', font=('Arial', 12))
-            self.opponent_label.grid(row=4, column=1, pady=(10, 0), sticky="nsew")
+            self.opponent_label.grid(row=4, column=1, rowspan=2, sticky="nsew")
+            self.nameLabel=tk.Label(self.window,font=('Arial',21))
+            self.nameLabel.grid(row=4,column=2, sticky='nsew')
+
             for i in range(3):
                 row_but = []
                 for j in range(3):
                     button = tk.Button(self.window, text="", font=("Arial", 50), anchor="center", height=2, width=6,
-                                    bg="lightblue", command=lambda row=i, col=j: self.handle_click(row, col))
+                                    bg="lightblue", command=lambda row=i, col=j: self.handle_click(row, col)) #initially set the state as disabled 
                     button.grid(row=i + 1, column=j, sticky="nsew")
                     row_but.append(button)
                 self.buttons.append(row_but)
@@ -164,6 +173,7 @@ class TicTacToeGame:
             exit_button.grid(row=6, column=0, pady=10, padx=5, sticky="nsew")
             reset_button = tk.Button(self.window, text="Reset", command=self.reset, bg='#FFD700', fg='black',font=('Arial', 12))
             reset_button.grid(row=6, column=2, pady=10, padx=5, sticky="nsew")
+
 
             # Pass the callback function to process
             
@@ -176,27 +186,48 @@ class TicTacToeGame:
         if self.client.fileno() == -1:
             print("Socket closed")
             return
-        if self.buttons[row][col]['state']=='normal':
-            d={'type':'move','message':{'row':str(row),'column':str(col)}}
+        if self.buttons[row][col].cget('state')=='normal' and self.flag:
+            d={'type':'move','message':{'row':row,'col':col}}
             json_data=json.dumps(d)
             print(json_data)
-            self.client.send(json_data.encode('utf-8'))   #json data is passed to the server: (can server know my name???)
+            while True:
+                self.client.setblocking(0)
+                try:
+                    self.client.send(json_data.encode('utf-8'))
+                    break
+                except BlockingIOError:
+                    print("Send operation would block. Handle it appropriately.")
+                    pass
+        
+                except Exception as e:
+                    print(f"Error occurred during send operation: {e}")
+                    pass
             self.l.append([row,col])
-
+            while True:
+                self.client.setblocking(0)
+                try:
+                    data=json.loads(self.client.recv(1024).decode('utf-8'))
+                    break
+                except BlockingIOError:
+                    print("recieve operation would block. Handle it appropriately.")
+                    pass
+        
+                except Exception as e:
+                    print(f"Error occurred during recieve operation: {e}")
+                    pass  
             #print the server response:
             try:
-                message=self.client.recv(1024).decode('utf-8')
-                data=json.loads(message)
+                print("response:",data)
                 if data['type']=='move':
                     if data['playerSymbol']=='X':
                         color='red'
                     else:
                         color='blue'
-                    self.buttons[int(data['row'])][int(data['col'])].config(text=data['playerSymbol'], fg=color)
+                    self.buttons[data['row']][data['col']].config(text=data['playerSymbol'], fg=color)
                     for i in range(3):
                         for j in range(3):
-                            self.buttons[i][j]['state'].configure(state='disabled')
-                    self.flag+=1
+                            self.buttons[i][j].config(state='disabled')
+                    self.flag=False
                     #disable the button 
                 elif data['type']=='gameEnd':
                     if data['winAlias']==self.alias:
@@ -208,10 +239,8 @@ class TicTacToeGame:
                     else:
                         messagebox.showinfo("oops!!   u Lost") 
                         self.reset_board()
-                        
-
                 else:
-                    self.fl.pop()       
+                    self.l.pop()       
             except Exception as e:
                 print('Error!',str(e))
                 exit(0)
@@ -224,7 +253,9 @@ class TicTacToeGame:
 
     def update_board(self):
         def process_server_data():
-           if self.flag%2==1: 
+           
+           if not self.flag:
+            self.nameLabel.config(text="opponents play",fg="blue") 
             try:
                 # Set the socket to non-blocking mode
                 self.client.setblocking(0)
@@ -236,22 +267,27 @@ class TicTacToeGame:
                 except BlockingIOError:
                     pass  # No data received, continue with non-blocking operations
 
-                if data and (len(self.l)!=0 ):
+                if data:
                     message = data.decode('utf-8')
-                    for i in range(3):
-                        for j in range(3):
-                            if [i, j] not in self.l:
-                                self.buttons[i][j]['state'].configure(state='normal')
                     data = json.loads(message)
-                    if data['type'] == "game":
+                    print("res in update: ",data)
+                    if data['type'] == "move":
+                        self.l.append([data['row'],data['col']])
+                        for i in range(3):
+                            for j in range(3):
+                                if [i, j] not in self.l:
+                                    self.buttons[i][j].config(state='normal')
+
+                        print("INSIDE UPDATE")
                         if data['playerSymbol'] == 'X':
                             color = 'red'
                         else:
                             color = 'blue'
-                        self.buttons[int(data['row'])][int(data['col'])].config(text=data['playerSymbol'], fg=color)
-                        self.flag += 1
+                        self.buttons[data['row']][data['col']].config(text=data['playerSymbol'], fg=color)
+                        self.flag=True
+                        self.buttons[data['row']][data['col']].config(state="disabled")
                     elif data['type'] == 'gameEnd':
-                        if data['result'] == self.alias:
+                        if data['winAlias'] == self.alias:
                             messagebox.showinfo("Congratulations", "You won :)")
                             sp.praise("Congratulations you won")
                             self.reset_board()
@@ -263,9 +299,9 @@ class TicTacToeGame:
                 import traceback
                 traceback.print_exc()
                 print("Something went wrong:", str(e))
-
-            # Schedule the function to be called again after 100 milliseconds
-           self.window.after(500, process_server_data)
+           else:
+               self.nameLabel.config(fg="red",text="Your Play")
+           self.window.after(100, process_server_data)
         # Initial call to start the loop
         process_server_data()
 
@@ -344,7 +380,6 @@ class TicTacToeGame:
     def client_recieve(self):
         def process_client_receive():
             try:
-                # Set the socket to non-blocking mode
                 self.client.setblocking(0)
                 data = b""
                 try:
@@ -353,9 +388,7 @@ class TicTacToeGame:
                         data += chunk
                 except BlockingIOError:
                     pass  # No data received, continue with non-blocking operations
-
                 if data:
-                    # Check if there is data to be received from the server
                     message = data.decode('utf-8')
                     data = json.loads(message)
                     if data['type'] == 'chat':
@@ -395,6 +428,7 @@ class TicTacToeGame:
                     # Check if there is data to be received from the server
                     message = data.decode('utf-8')
                     data = json.loads(message)
+                    print("In Error section: ",data)
                     if data['type'] == 'exit':
                         messagebox.showinfo('Player Left', 'Opponent left the game')
                     elif data['type'] == 'noPlayer':
@@ -414,6 +448,8 @@ class TicTacToeGame:
             self.window.after(500, process_server_errors)
         # Initial call to start the loop
         process_server_errors()
+
+
 
 
 
