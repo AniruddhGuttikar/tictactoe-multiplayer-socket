@@ -5,7 +5,7 @@ from tkinter import ttk
 import json
 import time
 import speech as sp
-
+import getip as gi
 class TicTacToeGame:
     def __init__(self):
         self.window = tk.Tk()
@@ -14,28 +14,20 @@ class TicTacToeGame:
         self.window.resizable(False,False)
         self.buttons = []
         self.l = []
+        self.ip_list=[]
         self.nameLabel=tk.Label()
-        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        
         self.host = socket.gethostname()
-        ip=socket.gethostbyname(self.host)
-        print(ip)
+        self.ip_current=socket.gethostbyname(self.host)
+        print(self.ip_current)
         self.flag = False
         self.alias = ""
-        while True:
-            try:
-                self.client.connect((ip, 3000))
-                break  # Connection successful, exit the loop
-            except OSError as e:
-                if e.errno == 10035:  # Check for [WinError 10035]
-                    # Connection is still in progress, wait and retry
-                    time.sleep(1)
-                else:
-                    # Handle other socket-related errors
-                    print(f"Error: {e}")
-                    break  # Terminate the loop in case of other errors
         self.opponent=""
-        self.create_main_page()
-
+        self.center_frame = tk.Frame(self.window, bg='#A9A9A9')
+        self.center_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        self.join_button = tk.Button(self.center_frame, text="Join a Game", command=self.join_game, bg='#4CAF50', fg='white', font=('Arial', 16), relief=tk.GROOVE)
+        self.join_button.pack(pady=10)
+        self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.window.protocol("WM_DELETE_WINDOW", self.on_exit)
         self.window.mainloop()
 
@@ -47,8 +39,34 @@ class TicTacToeGame:
         if not self.entry_alias.get():
             self.entry_alias.insert(0, 'Enter Alias Name')
 
+    def join_game(self):
+        self.ip_list=[]
+        self.ip_list=gi.get_connected_devices()
+        self.ip_list.append(self.ip_current)
+        print(self.ip_list)
+        if hasattr(self, 'join_button') and self.join_button.winfo_exists():
+            self.join_button.destroy()
+        for item in self.ip_list:
+            self.game_button = tk.Button(self.center_frame, text=item, command=lambda i=item: self.create_main_page(i), bg='#4CAF50', fg='white', font=('Arial', 16))
+            self.game_button.pack(pady=10)
+
     #creation of main page
-    def create_main_page(self):
+    def create_main_page(self,ip):
+        try:
+            
+            self.client.connect((ip, 3000))
+            for _ in range(len(self.ip_list)):
+                self.game_button.destroy()
+        except Exception as e:
+            print(f"Connection error: {e}")
+            messagebox.showwarning("NO game found", "no game found in this try other")
+            sp.speech("NO GAME FOUND IN THIS HOST RETRY")
+            for _ in range(len(self.ip_list)):
+                self.game_button.destroy()
+            self.join_game()
+
+
+        self.center_frame.destroy() 
         sp.speech("Welcome to the game buddy")
         time.sleep(1)
         self.alias = ""
@@ -236,6 +254,7 @@ class TicTacToeGame:
                         print()  
                     elif data['draw']==True:
                         messagebox.showinfo("draw","its a draw.. :)")
+                        self.reset_board()
                     else:
                         messagebox.showinfo("oops!!   u Lost") 
                         self.reset_board()
@@ -472,4 +491,5 @@ class TicTacToeGame:
         else:
             messagebox.showinfo('restart', 'opponent rejected to restart')    
 if __name__ == "__main__":
+    
     game = TicTacToeGame()
