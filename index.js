@@ -34,8 +34,8 @@ server.on('connection', async (socket) => {
             const playerName = message
 
             if (clients.length < 2) {
-                clients.push(socket);
                 socket.playerSymbol = clients.length === 0 ? "X" : "O"
+                clients.push(socket);
             } else {
                 console.error("Room is already full");
                 socket.destroy({
@@ -56,11 +56,12 @@ server.on('connection', async (socket) => {
                 const joinInfo = {
                     type: 'join',
                     user: socket.playerName,
+                    playerSymbol: socket.playerSymbol,
                 }
                 console.log(`${socket.playerName} has joined the game`)
-                clients.forEach(async (client) => {
+                clients.forEach(client => {
                     if (!client.destroyed) {
-                        await client.write(JSON.stringify(joinInfo))
+                        client.write(JSON.stringify(joinInfo))
                         console.log(`sedning .... ${client.playerName} first time`)
                     }
                 })
@@ -68,6 +69,7 @@ server.on('connection', async (socket) => {
                     clients[1].write(JSON.stringify({
                         type: 'join',
                         user: clients[0].playerName,
+                        playerSymbol: clients[0].playerSymbol,
                     }))
                     console.log(`sending ${clients[1].playerName} second time`)
                 }
@@ -91,18 +93,14 @@ server.on('connection', async (socket) => {
 
         if (type === "move") {
             const {row, col} = message;
-            
+            console.log('data received: ', JSON.parse(data))
+            console.log(`${socket.playerSymbol} has made a move`)
+            console.log('row, col', row, col)
             if (isValidMove(row, col)) {
-                gameState(row, col) = socket.playerSymbol
-            }
-            const gameResult = checkGameResult(gameState)
-
-            broadcastGameState(row, col, socket.playerSymbol)
-            
-            if (gameResult !== "ongoing") {
-                handleGameEnd(gameResult)
+                gameState[row][col] = socket.playerSymbol
+                broadcastGameState(row, col, socket.playerSymbol)
             } else {
-                console.error("invalid move")
+                console.log("invalid move")
                 const invalidMoveError = {
                     type: "invalidMoveError",
                     message: "invalid move",
@@ -110,6 +108,12 @@ server.on('connection', async (socket) => {
                 }
                 socket.write(JSON.stringify(invalidMoveError))
             }
+            const gameResult = checkGameResult()
+
+            if (gameResult !== 'ongoing') {
+                handleGameEnd(gameResult)
+            }
+
         }
         if (type === "restart") {
             const isRestart = message;
@@ -163,11 +167,13 @@ server.on('connection', async (socket) => {
         if (clients.length) {
             clients[0].write(JSON.stringify(closeInfo))
         }
+        resetGame()
     });
 
     // Handle errors
     socket.on('error', (err) => {
         console.error('Socket error:', err.message);
+        resetGame()
     });
 });
 
@@ -175,8 +181,7 @@ const isValidMove = (row, col) => {
     return gameState[row][col] === '0'
 }
 
-const checkGameResult = () => {
-{        
+const checkGameResult = () => { 
         for (let i = 0; i < 3; i++) {
             if (gameState[i][0] !== '0' && gameState[i][0] === gameState[i][1] && gameState[i][1] === gameState[i][2]) {
                 return gameState[i][0]; 
@@ -197,7 +202,6 @@ const checkGameResult = () => {
             return gameState[0][2]; 
         }
         
-        
         let isDraw = true;
         for (let i = 0; i < 3; i++) {
             for (let j = 0; j < 3; j++) {
@@ -214,8 +218,7 @@ const checkGameResult = () => {
             return 'draw'; 
         }
         
-        return 'ongoing';} 
-    
+        return 'ongoing';
 }
 const broadcastGameState = (row, col, playerSymbol) => {
     const gameStateMsg = {
@@ -251,8 +254,8 @@ const handleGameEnd = (result) => {
             client.write(JSON.stringify(endMsg))
         }
     })
-    resetGame()
 
+    resetGame()
 }
 
 const resetGame = () => {
