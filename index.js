@@ -34,7 +34,11 @@ server.on('connection', async (socket) => {
             const playerName = message
 
             if (clients.length < 2) {
-                socket.playerSymbol = clients.length === 0 ? "X" : "O"
+                if (clients.length === 0) {
+                    socket.playerSymbol = 'X'
+                } else {
+                    socket.playerSymbol = clients[0].playerSymbol === 'X' ? 'O' : 'X'
+                }
                 clients.push(socket);
             } else {
                 console.error("Room is already full");
@@ -62,7 +66,7 @@ server.on('connection', async (socket) => {
                 clients.forEach(client => {
                     if (!client.destroyed) {
                         client.write(JSON.stringify(joinInfo))
-                        console.log(`sedning .... ${client.playerName} first time`)
+                        console.log(`sending .... ${client.playerName} first time`)
                     }
                 })
                 if (clients.length === 2) {
@@ -108,13 +112,14 @@ server.on('connection', async (socket) => {
                 }
                 socket.write(JSON.stringify(invalidMoveError))
             }
+            //gets ongoing | draw | the struct
             const gameResult = checkGameResult()
 
             if (gameResult !== 'ongoing') {
                 handleGameEnd(gameResult)
             }
-
         }
+
         if (type === "restart") {
             const isRestart = message;
             socket.isRestart = isRestart === '1' ? true : false;
@@ -173,6 +178,19 @@ server.on('connection', async (socket) => {
     // Handle errors
     socket.on('error', (err) => {
         console.error('Socket error:', err.message);
+        console.log(`${socket.playerName} has disconnected`);
+        // Remove the client from the list
+        const index = clients.indexOf(socket);
+        if (index !== -1) {
+            clients.splice(index, 1);
+        }
+        const closeInfo = {
+            type: "playerLeft",
+            player: socket.playerName
+        }
+        if (clients.length) {
+            clients[0].write(JSON.stringify(closeInfo))
+        }
         resetGame()
     });
 });
@@ -181,25 +199,55 @@ const isValidMove = (row, col) => {
     return gameState[row][col] === '0'
 }
 
+//return winSeq and the winSymbol
 const checkGameResult = () => { 
         for (let i = 0; i < 3; i++) {
+            //check rows
             if (gameState[i][0] !== '0' && gameState[i][0] === gameState[i][1] && gameState[i][1] === gameState[i][2]) {
-                return gameState[i][0]; 
+                return ({
+                    winSymbol: gameState[i][0],
+                    winSeq: [
+                        {row1: i, col1: 0},
+                        {row2: i, col2: 1},
+                        {row3: i, col3: 2},
+                    ]
+                })
             }
         } 
-        
+        //check columns
         for (let i = 0; i < 3; i++) {
             if (gameState[0][i] !== '0' && gameState[0][i] === gameState[1][i] && gameState[1][i] === gameState[2][i]) {
-                return gameState[0][i]; 
+                return ({
+                    winSymbol: gameState[0][i],
+                    winSeq: [
+                        {row1: 0, col1: i},
+                        {row2: 1, col2: i},
+                        {row3: 2, col3: i},
+                    ]
+                }) 
             }
         }
-        
+        //check each diagonals
         if (gameState[0][0] !== '0' && gameState[0][0] === gameState[1][1] && gameState[1][1] === gameState[2][2]) {
-            return gameState[0][0]; 
+            return ({
+                winSymbol: gameState[0][0],
+                winSeq: [
+                    {row1: 0, col1: 0},
+                    {row2: 1, col2: 1},
+                    {row3: 2, col3: 2},
+                ]
+            })
         }
 
         if (gameState[0][2] !== '0' && gameState[0][2] === gameState[1][1] && gameState[1][1] === gameState[2][0]) {
-            return gameState[0][2]; 
+            return ({
+                winSymbol: gameState[0][2],
+                winSeq: [
+                    {row1: 0, col1: 2},
+                    {row2: 1, col2: 1},
+                    {row3: 2, col3: 0},
+                ]
+            })
         }
         
         let isDraw = true;
@@ -235,25 +283,34 @@ const broadcastGameState = (row, col, playerSymbol) => {
 }
 
 const handleGameEnd = (result) => {
-    let winAlias = null
-    let draw = true
-    clients.forEach(client => {
-        if (client.playerSymbol === result) {
-            winAlias = client.playerName
-            draw = false
+    //result is 'draw' | struct
+    if (result === 'draw') {
+        const endMsg = {
+            type: "gameEnd",
+            draw: true, 
         }
-    })
-    
-    const endMsg = {
-        type: "gameEnd",
-        draw, 
-        winAlias,
+        clients.forEach(client => {
+            if (!client.destroyed) {
+                client.write(JSON.stringify(endMsg))
+            }
+        })
+    } else {
+
+        const winAlias = clients.find(client => client.playerSymbol === result.winSymbol).playerName
+        const endMsg = {
+            ... result,
+            type: "gameEnd",
+            draw: false,
+            winAlias,
+        }
+        clients.forEach(client => {
+            if (!client.destroyed) {
+                client.write(JSON.stringify(endMsg))
+            }
+        })
     }
-    clients.forEach(client => {
-        if (!client.destroyed) {
-            client.write(JSON.stringify(endMsg))
-        }
-    })
+    
+
 
     resetGame()
 }
