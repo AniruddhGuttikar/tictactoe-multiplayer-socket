@@ -6,6 +6,9 @@ import json
 import time
 import speech as sp
 import getip as gi
+import pygame
+import speech_recognition as sr
+
 class TicTacToeGame:
     def __init__(self):
         self.window = tk.Tk()
@@ -15,8 +18,11 @@ class TicTacToeGame:
         self.buttons = []
         self.l = []
         self.ip_list=[]
+        self.mySymbol=""
         self.nameLabel=tk.Label()
-        
+        pygame.mixer.init()
+        pygame.mixer.music.load('multi-tic-tak-toe-socket\song.mp3')
+        pygame.mixer.music.play()
         self.host = socket.gethostname()
         self.ip_current=socket.gethostbyname(self.host)
         print(self.ip_current)
@@ -25,12 +31,14 @@ class TicTacToeGame:
         self.opponent=""
         self.center_frame = tk.Frame(self.window, bg='#A9A9A9')
         self.center_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        self.game_buttons=[]
         self.join_button = tk.Button(self.center_frame, text="Join a Game", command=self.join_game, bg='#4CAF50', fg='white', font=('Arial', 16), relief=tk.GROOVE)
         self.join_button.pack(pady=10)
+        self.refresh_button=tk.Button(text="Refresh",command=self.join_game, bg='#4CAF50', fg='white', font=('Arial', 16),state="disabled")    
+        self.refresh_button.grid(row=5,column=50)
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.window.protocol("WM_DELETE_WINDOW", self.on_exit)
         self.window.mainloop()
-
     def clear_placeholder(self, event):
         if self.entry_alias.get() == 'Enter Alias Name':
             self.entry_alias.delete(0, tk.END)
@@ -38,38 +46,60 @@ class TicTacToeGame:
     def restore_placeholder(self, event):
         if not self.entry_alias.get():
             self.entry_alias.insert(0, 'Enter Alias Name')
-
     def join_game(self):
-        self.ip_list=[]
+        for button in self.game_buttons:
+            button.destroy()
+        self.ip_list.clear()
+        self.game_buttons.clear()
         self.ip_list=gi.get_connected_devices()
         self.ip_list.append(self.ip_current)
         print(self.ip_list)
         if hasattr(self, 'join_button') and self.join_button.winfo_exists():
+            self.refresh_button.config(state=tk.NORMAL)
             self.join_button.destroy()
         for item in self.ip_list:
-            self.game_button = tk.Button(self.center_frame, text=item, command=lambda i=item: self.create_main_page(i), bg='#4CAF50', fg='white', font=('Arial', 16))
+            self.game_button = tk.Button(self.center_frame, text=item, command=lambda i=item: self.game(i), bg='#4CAF50', fg='white', font=('Arial', 16))
             self.game_button.pack(pady=10)
+            self.game_buttons.append(self.game_button)
 
     #creation of main page
-    def create_main_page(self,ip):
+    def game(self,ip):
+        
         try:
-            
+            self.window.after(0,self.animation2)
             self.client.connect((ip, 3000))
-            for _ in range(len(self.ip_list)):
-                self.game_button.destroy()
+            for button in self.game_buttons:
+                button.destroy()
+            res=messagebox.askyesno("Found a game","join?")
+            if res:
+                self.window.after(0,self.create_main_page())
+            else:
+                self.window.after(0,self.join_game)        
+
+
         except Exception as e:
             print(f"Connection error: {e}")
+            time.sleep(2)
             messagebox.showwarning("NO game found", "no game found in this try other")
             sp.speech("NO GAME FOUND IN THIS HOST RETRY")
-            for _ in range(len(self.ip_list)):
-                self.game_button.destroy()
-            self.join_game()
+            time.sleep(1)    
+            self.progressbar.stop()
+            self.waiting_label.destroy()
+            self.waiting_frame.destroy() 
+            self.window.after(0,self.join_game)    
 
-
+    def create_main_page(self):
+        self.refresh_button.destroy()            
         self.center_frame.destroy() 
+        self.progressbar.stop()
+        self.waiting_label.destroy()
+        self.waiting_frame.destroy() 
         sp.speech("Welcome to the game buddy")
-        time.sleep(1)
+        time.sleep(0.5)
+
         self.alias = ""
+        time.sleep(1)
+
         data = self.client.recv(1024).decode('utf-8')
         print(json.loads(data))
 
@@ -97,6 +127,15 @@ class TicTacToeGame:
         self.progressbar = ttk.Progressbar(self.waiting_frame, mode='indeterminate', length=200)
         self.progressbar.pack(pady=10)
         self.progressbar.start()
+
+    def animation2(self):
+        self.waiting_frame = tk.Frame(self.window, bg='#333333')
+        self.waiting_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+        self.waiting_label = tk.Label(self.waiting_frame, text="Searching for game", font=('Arial', 14), foreground='white', background='#333333')
+        self.waiting_label.pack(pady=20)
+        self.progressbar = ttk.Progressbar(self.waiting_frame, mode='indeterminate', length=200)
+        self.progressbar.pack(pady=10)
+        self.progressbar.start()        
     
     def alias_enter(self):
         try:
@@ -134,21 +173,22 @@ class TicTacToeGame:
                                 print("here",self.data)
                                 if self.data['playerSymbol']!="X":
                                     self.flag=True
+                                    self.mySymbol=self.data['playerSymbol']
                                 print("opponent is ", self.data['user'])
                                 self.opponent += self.data['user']
                                 self.window.after(0, self.create_board)
                                 self.window.after(0, self.update_board)
-                                self.window.after(0, self.client_recieve)
-                                self.window.after(0, self.errors)
+                                self.window.after(0, self.handle_clicks)
                                 return
-
                     except Exception as e:
-                        print("Something went wrong here... :(  ", str(e))
+                        import traceback
+                        import sys
+                        traceback.print_exc()
+                        print("Something went wrong at line {}: {}".format(sys.exc_info()[-1].tb_lineno, str(e)))
+
                     self.window.after(1000,process) 
                 self.window.after(0,process)
                 self.window.after(0,self.animation)
-
-
             else:
                 messagebox.showwarning('Same Name', 'Please choose a different name')
                 sp.speech("hey buddy u cannt have same name as opponent")
@@ -162,13 +202,9 @@ class TicTacToeGame:
     def create_board(self):
         try:
             print("creating board")
-            print("now im here")
-            self.progressbar.stop()
-            self.waiting_label.destroy()
-            self.waiting_frame.destroy()            
-        
+            print("now im here")          
             print("in after process :)")
-
+            self.handle_clicks()
             self.alias_label = tk.Label(self.window, text=f'Your Alias: {self.alias}', font=('Arial', 12))
             self.alias_label.grid(row=0, column=1, pady=(0, 10), sticky="nsew")
             self.opponent_label = tk.Label(self.window, text=f'Opponent: {self.opponent}', font=('Arial', 12))
@@ -191,10 +227,7 @@ class TicTacToeGame:
             exit_button.grid(row=6, column=0, pady=10, padx=5, sticky="nsew")
             reset_button = tk.Button(self.window, text="Reset", command=self.reset, bg='#FFD700', fg='black',font=('Arial', 12))
             reset_button.grid(row=6, column=2, pady=10, padx=5, sticky="nsew")
-
-
-            # Pass the callback function to process
-            
+            # Pass the callback function to process   
         except Exception as e:
             print(f"An error occurred during GUI update: {str(e)}")
 
@@ -249,14 +282,17 @@ class TicTacToeGame:
                     #disable the button 
                 elif data['type']=='gameEnd':
                     if data['winAlias']==self.alias:
-                        messagebox.showinfo("Congratulations","You won :)")
+                        messagebox.showinfo("Congratulations","You won :)                            ")
+                        sp.praise("Congratulations you won")
                         self.reset_board()
                         print()  
                     elif data['draw']==True:
                         messagebox.showinfo("draw","its a draw.. :)")
+                        sp.speech("its a Draw")
                         self.reset_board()
                     else:
                         messagebox.showinfo("oops!!   u Lost") 
+                        sp.con("Oops you lost it, better luck next time")
                         self.reset_board()
                 else:
                     self.l.pop()       
@@ -310,6 +346,9 @@ class TicTacToeGame:
                             messagebox.showinfo("Congratulations", "You won :)")
                             sp.praise("Congratulations you won")
                             self.reset_board()
+                        elif data['draw']==True:
+                            messagebox.showinfo("draw","its a draw.. :)")
+                            sp.speech("its a Draw")    
                         else:
                             messagebox.showinfo("Oops!!   You Lost")
                             sp.con("Oops you lost it, better luck next time")
@@ -323,23 +362,32 @@ class TicTacToeGame:
            self.window.after(100, process_server_data)
         # Initial call to start the loop
         process_server_data()
-
-
 #-------------------------------------------------------------------------------------------------------------------------------#
     #voice message
-    def sendMsg(self,msg):
-        self.send_button.config(text="🎤",command=self.voiceMessage)
+    def sendMsg(self):
+        self.send_button.config(text="🎤",command=lambda: self.voiceMessage)
         print("sending encoded voice message") 
+        self.window.after(0,self.send_message)
     def voiceMessage(self):
         print("voice message")
         res=messagebox.askyesno("voice","start voice message?")
         if res:
             msg=b""
-            self.send_button.config(text="❌",command=self.sendMsg(msg))
-
-
-
-
+            recognizer = sr.Recognizer()
+            with sr.Microphone() as source:
+                print("Voice Typing started. Speak now...")
+                while True:
+                    try:
+                        audio = recognizer.listen(source, timeout=5)  # Adjust the timeout value (in seconds)
+                        text = recognizer.recognize_google(audio)
+                        print("You said:", text)
+                        break
+                    except sr.UnknownValueError:
+                        pass
+                    except sr.RequestError as e:
+                        print("Could not request results from Google Speech Recognition service; {0}".format(e))
+            self.message_entry.insert(tk.END,text)
+            self.send_button.config(text="❌",command=lambda: self.sendMsg)
 
         #chat room
     def create_chatroom(self, master):
@@ -395,33 +443,7 @@ class TicTacToeGame:
         self.chat_display.config(state='disabled')
         self.chat_display.see(tk.END)  # Scroll to the bottom
 
-
-    def client_recieve(self):
-        def process_client_receive():
-            try:
-                self.client.setblocking(0)
-                data = b""
-                try:
-                    chunk = self.client.recv(1024)
-                    if chunk:
-                        data += chunk
-                except BlockingIOError:
-                    pass  # No data received, continue with non-blocking operations
-                if data:
-                    message = data.decode('utf-8')
-                    data = json.loads(message)
-                    if data['type'] == 'chat':
-                        print(data['message'])  # Make it print in chatbot gui
-                        self.display_message(f" {data['message']}\n")
-            except Exception as e:
-                print("Error in client_receive:", str(e))
-
-            # Schedule the function to be called again after 500 milliseconds
-            self.window.after(500, process_client_receive)
-
-        process_client_receive()
-
-#-------------------------------------------------------------------------------------------------------------------------------#
+#----------------------------------------------------------------------------------------------#
     #exit and reset querries
     def on_exit(self):
         result = messagebox.askyesno("Exit", "Are you sure you want to exit?")
@@ -429,8 +451,7 @@ class TicTacToeGame:
             self.client.send(json.dumps({'type': 'exit', 'alias': self.alias}).encode('utf-8'))
             self.window.destroy()
             exit(0)
-
-    def errors(self):
+    def handle_clicks(self):
         def process_server_errors():
             try:
                 # Set the socket to non-blocking mode
@@ -442,7 +463,7 @@ class TicTacToeGame:
                         data += chunk
                 except BlockingIOError:
                     pass  # No data received, continue with non-blocking operations
-
+                print("Im in errors")   
                 if data:
                     # Check if there is data to be received from the server
                     message = data.decode('utf-8')
@@ -455,41 +476,61 @@ class TicTacToeGame:
                     elif data['type'] == 'restart':
                         res = messagebox.askyesno('Restart', 'Opponent requested a restart. Do you agree?')
                         self.client.send(json.dumps({'type': 'restart', 'val': '1' if res else '0'}).encode('utf-8'))
+                    elif data['type'] == 'reset' and data['val']=='1':
+                        messagebox.showinfo("","RESTARTING THE GAME")
+                        self.window.after(0,self.reset_board)    
                     elif data['type'] == "join":
                         messagebox.showinfo('Joined', f'Opponent {data["user"]} joined the game')
+                        self.progressbar.stop()
+                        self.waiting_label.destroy()
+                        self.waiting_frame.destroy()  
+                    if data['type'] == 'chat':
+                        print(data['message'])  # Make it print in chatbot gui
+                        self.display_message(f" {data['message']}\n")    
+
+                        self.opponent_label.config(text=data['user'])
                     elif data['type']=="invalidMoveError":
                         messagebox.showerror("error","invalid moove") 
                     elif data['type']=="playerLeft":
-                        messagebox.showinfo("playerleft","opponent left the game")      
+                        messagebox.showinfo("playerleft","opponent left the game")  
+                        messagebox.showinfo("you won the game")    
+                        self.window.after(0,self.reset_board)
+                        self.window.after(0,self.animation)
             except Exception as e:
                 print("Something went wrong:", str(e))
             # Schedule the function to be called again after 500 milliseconds
-            self.window.after(500, process_server_errors)
+            self.window.after(100, process_server_errors)
         # Initial call to start the loop
         process_server_errors()
-
-
-
-
 
     def reset_board(self):
         for i in range(3):
             for j in range(3):
-                self.buttons[i][j].config(text="", state=tk.NORMAL)
+                self.buttons[i][j].config(text="", state=tk.NORMAL if self.mySymbol=='X' else tk.DISABLED)
         self.l = []
-
-    def reset(self):
-        self.client.send(json.dumps({'type':'reset','alias':self.alias}).encode('utf-8'))
-       
-        res = self.client.recv(1024).decode('utf-8')
-        data=json.loads(res)
-        if(data['val']=='1'):
-            for i in range(3):
-                for j in range(3):
-                    self.buttons[i][j].config(text="", state=tk.NORMAL)
-            self.l = []
+        if self.mySymbol=='X':
+            self.flag=False
+            self.nameLabel.config(fg="blue",text="Opponents Play")
         else:
-            messagebox.showinfo('restart', 'opponent rejected to restart')    
+            self.flag=True
+            self.nameLabel.config(fg="red",text="Your Play")
+    def reset(self):
+        self.client.send(json.dumps({'type':'restart','alias':self.alias}).encode('utf-8'))
+        try:
+                self.client.setblocking(0)
+                data = b""
+                try:
+                    chunk = self.client.recv(1024)
+                    if chunk:
+                        data += chunk
+                except BlockingIOError:
+                    pass  # No data received, continue with non-blocking operations
+                if data:
+                    res=data.decode('utf-8')
+                    data=json.loads(res)
+                    if(data['val']=='0'):
+                        messagebox.showinfo('restart', 'opponent rejected to restart')    
+        except:
+            print("some problem while reset")                
 if __name__ == "__main__":
-    
     game = TicTacToeGame()
