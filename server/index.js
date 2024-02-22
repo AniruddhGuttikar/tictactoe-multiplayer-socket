@@ -122,38 +122,38 @@ server.on('connection', async (socket) => {
 
         if (type === "restart") {
             const isRestart = message;
-            socket.isRestart = isRestart === '1' ? true : false;
+            socket.isRestart = isRestart === 1 ? true : false;
             if (socket.isRestart === false) {
                 const index = clients.indexOf(socket);
                 socket.destroy()
                 if (index !== -1) {
                     clients.splice(index, 1);
                 }
-            }
-            const allPlayersReady = clients.every(client => client.isRestart)
-            if (allPlayersReady && clients.length === 2) {
-                console.log("Restarting the game")
-                const restartInfo = {
-                    type: 'restart',
-                    message: '1',
-                }
-                clients.forEach(client => {
-                    if (!client.destroyed) {
-                        socket.write(JSON.stringify(restartInfo));
-                    }
-                })
-            } else {
-                console.log("can't restart the game yet")
-                const restartInfo = {
-                    type: 'restart',
-                    message: '0',
-                }
-                clients.forEach(client => {
-                    if (!client.destroyed) {
-                        socket.write(JSON.parse(restartInfo))
-                    }
-                })
-            }
+            } 
+            // const allPlayersReady = clients.every(client => client.isRestart)
+            // if (allPlayersReady && clients.length === 2) {
+            //     console.log("Restarting the game")
+            //     const restartInfo = {
+            //         type: 'restart',
+            //         message: 1,
+            //     }
+            //     clients.forEach(client => {
+            //         if (!client.destroyed) {
+            //             socket.write(JSON.stringify(restartInfo));
+            //         }
+            //     })
+            // } else {
+            //     console.log("can't restart the game yet")
+            //     const restartInfo = {
+            //         type: 'restart',
+            //         message: 0,
+            //     }
+            //     clients.forEach(client => {
+            //         if (!client.destroyed) {
+            //             socket.write(JSON.parse(restartInfo))
+            //         }
+            //     })
+            // }
         }
     });
 
@@ -206,11 +206,11 @@ const checkGameResult = () => {
             if (gameState[i][0] !== '0' && gameState[i][0] === gameState[i][1] && gameState[i][1] === gameState[i][2]) {
                 return ({
                     winSymbol: gameState[i][0],
-                    winSeq: [
-                        {row1: i, col1: 0},
-                        {row2: i, col2: 1},
-                        {row3: i, col3: 2},
-                    ]
+                    winSeq: {
+                        row1: i, col1: 0,
+                        row2: i, col2: 1,
+                        row3: i, col3: 2,
+                    }
                 })
             }
         } 
@@ -219,11 +219,11 @@ const checkGameResult = () => {
             if (gameState[0][i] !== '0' && gameState[0][i] === gameState[1][i] && gameState[1][i] === gameState[2][i]) {
                 return ({
                     winSymbol: gameState[0][i],
-                    winSeq: [
-                        {row1: 0, col1: i},
-                        {row2: 1, col2: i},
-                        {row3: 2, col3: i},
-                    ]
+                    winSeq: {
+                        row1: 0, col1: i,
+                        row2: 1, col2: i,
+                        row3: 2, col3: i,
+                    }
                 }) 
             }
         }
@@ -231,22 +231,22 @@ const checkGameResult = () => {
         if (gameState[0][0] !== '0' && gameState[0][0] === gameState[1][1] && gameState[1][1] === gameState[2][2]) {
             return ({
                 winSymbol: gameState[0][0],
-                winSeq: [
-                    {row1: 0, col1: 0},
-                    {row2: 1, col2: 1},
-                    {row3: 2, col3: 2},
-                ]
+                winSeq: {
+                    row1: 0, col1: 0,
+                    row2: 1, col2: 1,
+                    row3: 2, col3: 2,
+                }
             })
         }
 
         if (gameState[0][2] !== '0' && gameState[0][2] === gameState[1][1] && gameState[1][1] === gameState[2][0]) {
             return ({
                 winSymbol: gameState[0][2],
-                winSeq: [
-                    {row1: 0, col1: 2},
-                    {row2: 1, col2: 1},
-                    {row3: 2, col3: 0},
-                ]
+                winSeq: {
+                    row1: 0, col1: 2,
+                    row2: 1, col2: 1,
+                    row3: 2, col3: 0,
+                }
             })
         }
         
@@ -266,7 +266,7 @@ const checkGameResult = () => {
             return 'draw'; 
         }
         
-        return 'ongoing';
+    return 'ongoing';
 }
 const broadcastGameState = (row, col, playerSymbol) => {
     const gameStateMsg = {
@@ -287,7 +287,7 @@ const handleGameEnd = (result) => {
     if (result === 'draw') {
         const endMsg = {
             type: "gameEnd",
-            draw: true, 
+            draw: '1', 
         }
         clients.forEach(client => {
             if (!client.destroyed) {
@@ -300,7 +300,7 @@ const handleGameEnd = (result) => {
         const endMsg = {
             ... result,
             type: "gameEnd",
-            draw: false,
+            draw: '0',
             winAlias,
         }
         clients.forEach(client => {
@@ -310,8 +310,6 @@ const handleGameEnd = (result) => {
         })
     }
     
-
-
     resetGame()
 }
 
