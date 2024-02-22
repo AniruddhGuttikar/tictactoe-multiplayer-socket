@@ -13,7 +13,7 @@ class TicTacToeGame:
     def __init__(self):
         self.window = tk.Tk()
         self.window.title("Tic Tac Toe")
-        self.window.geometry("1280x760")
+        self.window.geometry("1480x960")
         self.window.resizable(False,False)
         self.buttons = []
         self.l = []
@@ -21,9 +21,9 @@ class TicTacToeGame:
         self.mySymbol=""
         self.nameLabel=tk.Label()
         pygame.mixer.init()
-        pygame.mixer.music.load('multi-tic-tak-toe-socket\song.mp3')
+        pygame.mixer.music.load('./song.mp3')
         pygame.mixer.music.play()
-        self.host = socket.gethostname()
+        self.host = socket.gethostname() 
         self.ip_current=socket.gethostbyname(self.host)
         print(self.ip_current)
         self.flag = False
@@ -42,10 +42,11 @@ class TicTacToeGame:
     def clear_placeholder(self, event):
         if self.entry_alias.get() == 'Enter Alias Name':
             self.entry_alias.delete(0, tk.END)
-
     def restore_placeholder(self, event):
         if not self.entry_alias.get():
             self.entry_alias.insert(0, 'Enter Alias Name')
+
+#---------------------------------------------------HOST SEARCH---------------------------------------------------------#            
     def join_game(self):
         for button in self.game_buttons:
             button.destroy()
@@ -61,10 +62,8 @@ class TicTacToeGame:
             self.game_button = tk.Button(self.center_frame, text=item, command=lambda i=item: self.game(i), bg='#4CAF50', fg='white', font=('Arial', 16))
             self.game_button.pack(pady=10)
             self.game_buttons.append(self.game_button)
-
     #creation of main page
     def game(self,ip):
-        
         try:
             self.window.after(0,self.animation2)
             self.client.connect((ip, 3000))
@@ -75,8 +74,6 @@ class TicTacToeGame:
                 self.window.after(0,self.create_main_page())
             else:
                 self.window.after(0,self.join_game)        
-
-
         except Exception as e:
             print(f"Connection error: {e}")
             time.sleep(2)
@@ -88,6 +85,10 @@ class TicTacToeGame:
             self.waiting_frame.destroy() 
             self.window.after(0,self.join_game)    
 
+
+
+
+#----------------------------------------------------STARTING OF GAME------------------------------------------------------#
     def create_main_page(self):
         self.refresh_button.destroy()            
         self.center_frame.destroy() 
@@ -171,9 +172,9 @@ class TicTacToeGame:
                             self.data = json.loads(msg)
                             if self.data['type'] == 'join':
                                 print("here",self.data)
+                                self.mySymbol=self.data['playerSymbol']
                                 if self.data['playerSymbol']!="X":
                                     self.flag=True
-                                    self.mySymbol=self.data['playerSymbol']
                                 print("opponent is ", self.data['user'])
                                 self.opponent += self.data['user']
                                 self.window.after(0, self.create_board)
@@ -204,7 +205,7 @@ class TicTacToeGame:
             print("creating board")
             print("now im here")          
             print("in after process :)")
-            self.handle_clicks()
+
             self.alias_label = tk.Label(self.window, text=f'Your Alias: {self.alias}', font=('Arial', 12))
             self.alias_label.grid(row=0, column=1, pady=(0, 10), sticky="nsew")
             self.opponent_label = tk.Label(self.window, text=f'Opponent: {self.opponent}', font=('Arial', 12))
@@ -225,8 +226,6 @@ class TicTacToeGame:
             messagebox.showinfo('info', f'You are playing with {self.opponent}')
             exit_button = tk.Button(self.window, text="Exit", command=self.on_exit, bg='#FF0000', fg='white',font=('Arial', 12))
             exit_button.grid(row=6, column=0, pady=10, padx=5, sticky="nsew")
-            reset_button = tk.Button(self.window, text="Reset", command=self.reset, bg='#FFD700', fg='black',font=('Arial', 12))
-            reset_button.grid(row=6, column=2, pady=10, padx=5, sticky="nsew")
             # Pass the callback function to process   
         except Exception as e:
             print(f"An error occurred during GUI update: {str(e)}")
@@ -280,20 +279,32 @@ class TicTacToeGame:
                             self.buttons[i][j].config(state='disabled')
                     self.flag=False
                     #disable the button 
-                elif data['type']=='gameEnd':
-                    if data['winAlias']==self.alias:
-                        messagebox.showinfo("Congratulations","You won :)                            ")
+                elif data['type'] == 'gameEnd':
+                    if data['winAlias'] == self.alias:
+                        messagebox.showinfo("Congratulations", "You won :)")
                         sp.praise("Congratulations you won")
-                        self.reset_board()
-                        print()  
+                        r=messagebox.askyesno("Restart","restart the game ?  ")
+                        if r:
+                            self.window.after(0, self.reset)
+                        else:
+                            self.on_exit() 
+
                     elif data['draw']==True:
                         messagebox.showinfo("draw","its a draw.. :)")
-                        sp.speech("its a Draw")
-                        self.reset_board()
+                        sp.speech("its a Draw")   
+                        r=messagebox.askyesno("Restart","restart the game ?  ")
+                        if r:
+                            self.window.after(0,self.reset)
+                        else:
+                            self.on_exit()  
                     else:
-                        messagebox.showinfo("oops!!   u Lost") 
+                        messagebox.showinfo("Oops!!   You Lost")
                         sp.con("Oops you lost it, better luck next time")
-                        self.reset_board()
+                        r=messagebox.askyesno("Restart","restart the game ?  ")
+                        if r:
+                            self.window.after(0, self.reset)
+                        else:
+                            self.on_exit() 
                 else:
                     self.l.pop()       
             except Exception as e:
@@ -341,18 +352,33 @@ class TicTacToeGame:
                         self.buttons[data['row']][data['col']].config(text=data['playerSymbol'], fg=color)
                         self.flag=True
                         self.buttons[data['row']][data['col']].config(state="disabled")
+
                     elif data['type'] == 'gameEnd':
                         if data['winAlias'] == self.alias:
                             messagebox.showinfo("Congratulations", "You won :)")
                             sp.praise("Congratulations you won")
-                            self.reset_board()
+                            r=messagebox.askyesno("Restart","restart the game ?  ")
+                            if r:
+                                self.window.after(0, self.reset)
+                            else:
+                                self.on_exit() 
+
                         elif data['draw']==True:
                             messagebox.showinfo("draw","its a draw.. :)")
-                            sp.speech("its a Draw")    
+                            sp.speech("its a Draw")   
+                            r=messagebox.askyesno("Restart","restart the game ?  ")
+                            if r:
+                                self.window.after(0, self.reset)
+                            else:
+                                self.on_exit()  
                         else:
                             messagebox.showinfo("Oops!!   You Lost")
                             sp.con("Oops you lost it, better luck next time")
-                            self.reset_board()
+                            r=messagebox.askyesno("Restart","restart the game ?  ")
+                            if r:
+                                self.window.after(0, self.reset)
+                            else:
+                                self.on_exit() 
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -451,6 +477,8 @@ class TicTacToeGame:
             self.client.send(json.dumps({'type': 'exit', 'alias': self.alias}).encode('utf-8'))
             self.window.destroy()
             exit(0)
+
+
     def handle_clicks(self):
         def process_server_errors():
             try:
@@ -463,7 +491,7 @@ class TicTacToeGame:
                         data += chunk
                 except BlockingIOError:
                     pass  # No data received, continue with non-blocking operations
-                print("Im in errors")   
+               
                 if data:
                     # Check if there is data to be received from the server
                     message = data.decode('utf-8')
@@ -484,6 +512,7 @@ class TicTacToeGame:
                         self.progressbar.stop()
                         self.waiting_label.destroy()
                         self.waiting_frame.destroy()  
+                        self.opponent_label.config(text=data['user'])
                     if data['type'] == 'chat':
                         print(data['message'])  # Make it print in chatbot gui
                         self.display_message(f" {data['message']}\n")    
@@ -506,7 +535,7 @@ class TicTacToeGame:
     def reset_board(self):
         for i in range(3):
             for j in range(3):
-                self.buttons[i][j].config(text="", state=tk.NORMAL if self.mySymbol=='X' else tk.DISABLED)
+                self.buttons[i][j].config(text="", state=tk.NORMAL)
         self.l = []
         if self.mySymbol=='X':
             self.flag=False
@@ -515,22 +544,8 @@ class TicTacToeGame:
             self.flag=True
             self.nameLabel.config(fg="red",text="Your Play")
     def reset(self):
-        self.client.send(json.dumps({'type':'restart','alias':self.alias}).encode('utf-8'))
-        try:
-                self.client.setblocking(0)
-                data = b""
-                try:
-                    chunk = self.client.recv(1024)
-                    if chunk:
-                        data += chunk
-                except BlockingIOError:
-                    pass  # No data received, continue with non-blocking operations
-                if data:
-                    res=data.decode('utf-8')
-                    data=json.loads(res)
-                    if(data['val']=='0'):
-                        messagebox.showinfo('restart', 'opponent rejected to restart')    
-        except:
-            print("some problem while reset")                
+        self.client.send(json.dumps({'type':'restart','message':1}).encode('utf-8'))
+        self.window.after(0,self.reset_board)               
 if __name__ == "__main__":
     game = TicTacToeGame()
+
