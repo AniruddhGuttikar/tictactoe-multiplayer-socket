@@ -13,7 +13,7 @@ class TicTacToeGame:
     def __init__(self):
         self.window = tk.Tk()
         self.window.title("Tic Tac Toe")
-        self.window.geometry("1480x960")
+        self.window.geometry("1280x760")
         self.window.resizable(False,False)
         self.buttons = []
         self.l = []
@@ -21,7 +21,7 @@ class TicTacToeGame:
         self.mySymbol=""
         self.nameLabel=tk.Label()
         pygame.mixer.init()
-        pygame.mixer.music.load('./song.mp3')
+        pygame.mixer.music.load('multi-tic-tak-toe-socket\song.mp3')
         pygame.mixer.music.play()
         self.host = socket.gethostname() 
         self.ip_current=socket.gethostbyname(self.host)
@@ -46,7 +46,7 @@ class TicTacToeGame:
         if not self.entry_alias.get():
             self.entry_alias.insert(0, 'Enter Alias Name')
 
-#---------------------------------------------------HOST SEARCH---------------------------------------------------------#            
+#---------------------------------------------------HOAST SEARCH---------------------------------------------------------#            
     def join_game(self):
         for button in self.game_buttons:
             button.destroy()
@@ -84,8 +84,6 @@ class TicTacToeGame:
             self.waiting_label.destroy()
             self.waiting_frame.destroy() 
             self.window.after(0,self.join_game)    
-
-
 
 
 #----------------------------------------------------STARTING OF GAME------------------------------------------------------#
@@ -178,7 +176,6 @@ class TicTacToeGame:
                                 print("opponent is ", self.data['user'])
                                 self.opponent += self.data['user']
                                 self.window.after(0, self.create_board)
-                                self.window.after(0, self.update_board)
                                 self.window.after(0, self.handle_clicks)
                                 return
                     except Exception as e:
@@ -196,8 +193,6 @@ class TicTacToeGame:
                 self.entry_alias.delete(0,tk.END)
         except Exception as e:
             print(f"An error occurred: {str(e)}")
-       
-
 #-------------------------------------------------------------------------------------------------------------------------------#
     #playig area
     def create_board(self):
@@ -226,6 +221,10 @@ class TicTacToeGame:
             messagebox.showinfo('info', f'You are playing with {self.opponent}')
             exit_button = tk.Button(self.window, text="Exit", command=self.on_exit, bg='#FF0000', fg='white',font=('Arial', 12))
             exit_button.grid(row=6, column=0, pady=10, padx=5, sticky="nsew")
+            if self.mySymbol!='X':
+                self.nameLabel.config(text="Your play",fg="red")
+            else:    
+                self.nameLabel.config(text="opponents play",fg="blue")
             # Pass the callback function to process   
         except Exception as e:
             print(f"An error occurred during GUI update: {str(e)}")
@@ -246,7 +245,6 @@ class TicTacToeGame:
                     self.client.send(json_data.encode('utf-8'))
                     break
                 except BlockingIOError:
-                    print("Send operation would block. Handle it appropriately.")
                     pass
         
                 except Exception as e:
@@ -259,7 +257,6 @@ class TicTacToeGame:
                     data=json.loads(self.client.recv(1024).decode('utf-8'))
                     break
                 except BlockingIOError:
-                    print("recieve operation would block. Handle it appropriately.")
                     pass
         
                 except Exception as e:
@@ -273,28 +270,27 @@ class TicTacToeGame:
                         color='red'
                     else:
                         color='blue'
-                    self.buttons[data['row']][data['col']].config(text=data['playerSymbol'], fg=color)
-                    for i in range(3):
-                        for j in range(3):
-                            self.buttons[i][j].config(state='disabled')
+                    self.buttons[data['row']][data['col']].config(text=data['playerSymbol'], fg=color,state=tk.DISABLED)
                     self.flag=False
                     #disable the button 
+                    self.nameLabel.config(text="opponents play",fg="blue")
                 elif data['type'] == 'gameEnd':
+                    print("game End msg: ",data)
                     if data['winAlias'] == self.alias:
                         messagebox.showinfo("Congratulations", "You won :)")
                         sp.praise("Congratulations you won")
                         r=messagebox.askyesno("Restart","restart the game ?  ")
                         if r:
-                            self.window.after(0, self.reset)
+                            self.window.after(0,self.reset_board)
                         else:
                             self.on_exit() 
 
-                    elif data['draw']==True:
+                    elif data['draw']=='1':
                         messagebox.showinfo("draw","its a draw.. :)")
                         sp.speech("its a Draw")   
                         r=messagebox.askyesno("Restart","restart the game ?  ")
                         if r:
-                            self.window.after(0,self.reset)
+                            self.window.after(0,self.reset_board)
                         else:
                             self.on_exit()  
                     else:
@@ -302,7 +298,7 @@ class TicTacToeGame:
                         sp.con("Oops you lost it, better luck next time")
                         r=messagebox.askyesno("Restart","restart the game ?  ")
                         if r:
-                            self.window.after(0, self.reset)
+                            self.window.after(0,self.reset_board)
                         else:
                             self.on_exit() 
                 else:
@@ -315,79 +311,6 @@ class TicTacToeGame:
             messagebox.showwarning('warning','sorry pal you cant click this other payer needs to play!') 
             sp.speech("sorry pal you cant click this other payer needs to play")
        
-
-
-    def update_board(self):
-        def process_server_data():
-           
-           if not self.flag:
-            self.nameLabel.config(text="opponents play",fg="blue") 
-            try:
-                # Set the socket to non-blocking mode
-                self.client.setblocking(0)
-                data = b""
-                try:
-                    chunk = self.client.recv(1024)
-                    if chunk:
-                        data += chunk
-                except BlockingIOError:
-                    pass  # No data received, continue with non-blocking operations
-
-                if data:
-                    message = data.decode('utf-8')
-                    data = json.loads(message)
-                    print("res in update: ",data)
-                    if data['type'] == "move":
-                        self.l.append([data['row'],data['col']])
-                        for i in range(3):
-                            for j in range(3):
-                                if [i, j] not in self.l:
-                                    self.buttons[i][j].config(state='normal')
-
-                        print("INSIDE UPDATE")
-                        if data['playerSymbol'] == 'X':
-                            color = 'red'
-                        else:
-                            color = 'blue'
-                        self.buttons[data['row']][data['col']].config(text=data['playerSymbol'], fg=color)
-                        self.flag=True
-                        self.buttons[data['row']][data['col']].config(state="disabled")
-
-                    elif data['type'] == 'gameEnd':
-                        if data['winAlias'] == self.alias:
-                            messagebox.showinfo("Congratulations", "You won :)")
-                            sp.praise("Congratulations you won")
-                            r=messagebox.askyesno("Restart","restart the game ?  ")
-                            if r:
-                                self.window.after(0, self.reset)
-                            else:
-                                self.on_exit() 
-
-                        elif data['draw']==True:
-                            messagebox.showinfo("draw","its a draw.. :)")
-                            sp.speech("its a Draw")   
-                            r=messagebox.askyesno("Restart","restart the game ?  ")
-                            if r:
-                                self.window.after(0, self.reset)
-                            else:
-                                self.on_exit()  
-                        else:
-                            messagebox.showinfo("Oops!!   You Lost")
-                            sp.con("Oops you lost it, better luck next time")
-                            r=messagebox.askyesno("Restart","restart the game ?  ")
-                            if r:
-                                self.window.after(0, self.reset)
-                            else:
-                                self.on_exit() 
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                print("Something went wrong:", str(e))
-           else:
-               self.nameLabel.config(fg="red",text="Your Play")
-           self.window.after(100, process_server_data)
-        # Initial call to start the loop
-        process_server_data()
 #-------------------------------------------------------------------------------------------------------------------------------#
     #voice message
     def sendMsg(self):
@@ -484,50 +407,110 @@ class TicTacToeGame:
             try:
                 # Set the socket to non-blocking mode
                 self.client.setblocking(0)
-                data = b""
+                data=b""
                 try:
                     chunk = self.client.recv(1024)
                     if chunk:
                         data += chunk
                 except BlockingIOError:
                     pass  # No data received, continue with non-blocking operations
-               
+                print(data)
                 if data:
                     # Check if there is data to be received from the server
-                    message = data.decode('utf-8')
-                    data = json.loads(message)
-                    print("In Error section: ",data)
-                    if data['type'] == 'exit':
-                        messagebox.showinfo('Player Left', 'Opponent left the game')
-                    elif data['type'] == 'noPlayer':
-                        messagebox.showwarning('Wait Pal', 'Hey buddy, wait for player 2 to join')
-                    elif data['type'] == 'restart':
-                        res = messagebox.askyesno('Restart', 'Opponent requested a restart. Do you agree?')
-                        self.client.send(json.dumps({'type': 'restart', 'val': '1' if res else '0'}).encode('utf-8'))
-                    elif data['type'] == 'reset' and data['val']=='1':
-                        messagebox.showinfo("","RESTARTING THE GAME")
-                        self.window.after(0,self.reset_board)    
-                    elif data['type'] == "join":
-                        messagebox.showinfo('Joined', f'Opponent {data["user"]} joined the game')
-                        self.progressbar.stop()
-                        self.waiting_label.destroy()
-                        self.waiting_frame.destroy()  
-                        self.opponent_label.config(text=data['user'])
-                    if data['type'] == 'chat':
-                        print(data['message'])  # Make it print in chatbot gui
-                        self.display_message(f" {data['message']}\n")    
+                    messages = data.decode('utf-8').split('}{')
+                    for message in messages:
+                        # Reconstruct each JSON object and load it
+                        if message.startswith('{'):
+                            if not message.endswith('}'):
+                                message += '}'
+                            try:
+                                data = json.loads(message)
+                            except json.decoder.JSONDecodeError as e:
+                                print(f"JSON Decode Error: {e}")
+                                # Handle the error as needed
+                        print("in handle clicks: ",data)
+                        if data['type'] == 'exit':
+                            messagebox.showinfo('Player Left', 'Opponent left the game')
+                        elif data['type'] == 'noPlayer':
+                            messagebox.showwarning('Wait Pal', 'Hey buddy, wait for player 2 to join')
+                        elif data['type'] == 'restart':
+                            res = messagebox.askyesno('Restart', 'Opponent requested a restart. Do you agree?')
+                            self.client.send(json.dumps({'type': 'restart', 'val': '1' if res else '0'}).encode('utf-8'))
+                        elif data['type'] == 'reset' and data['val']=='1':
+                            messagebox.showinfo("","RESTARTING THE GAME")
+                            self.window.after(0,self.reset_board)    
+                        elif data['type'] == "join":
+                            messagebox.showinfo('Joined', f'Opponent {data["user"]} joined the game')
+                            self.progressbar.stop()
+                            self.waiting_label.destroy()
+                            self.waiting_frame.destroy()  
+                            self.opponent_label.config(text=data['user'])
+                        if data['type'] == 'chat':
+                            print(data['message'])  # Make it print in chatbot gui
+                            self.display_message(f" {data['message']}\n")    
+                            self.opponent_label.config(text=data['user'])
+                        elif data['type']=="invalidMoveError":
+                            messagebox.showerror("error","invalid moove") 
+                        elif data['type']=="playerLeft":
+                            messagebox.showinfo("playerleft","opponent left the game")   
+                            self.window.after(0,self.reset_board)
+                            self.window.after(0,self.animation)
+                        elif data['type'] == 'gameEnd':
+                            print("game End msg: ",data)
+                            if 'winAlias' in data and data['winAlias'] == self.alias:
+                                messagebox.showinfo("Congratulations", "You won :)")
+                                sp.praise("Congratulations you won")
+                                r=messagebox.askyesno("Restart","restart the game ?  ")
+                                if r:
+                                    self.window.after(0,self.reset_board)
+                                else:
+                                    self.on_exit() 
 
-                        self.opponent_label.config(text=data['user'])
-                    elif data['type']=="invalidMoveError":
-                        messagebox.showerror("error","invalid moove") 
-                    elif data['type']=="playerLeft":
-                        messagebox.showinfo("playerleft","opponent left the game")  
-                        messagebox.showinfo("you won the game")    
-                        self.window.after(0,self.reset_board)
-                        self.window.after(0,self.animation)
+                            elif data['draw']=='1':
+                                messagebox.showinfo("draw","its a draw.. :)")
+                                sp.speech("its a Draw")   
+                                r=messagebox.askyesno("Restart","restart the game ?  ")
+                                if r:
+                                    self.window.after(0,self.reset_board)
+                                else:
+                                    self.on_exit()  
+                            else:
+                                messagebox.showinfo("Oops!!   You Lost")
+                                sp.con("Oops you lost it, better luck next time")
+                                r=messagebox.askyesno("Restart","restart the game ?  ")
+                                if r:
+                                    self.window.after(0,self.reset_board)
+                                else:
+                                    self.on_exit()   
+                        elif data['type']=='move':
+                                    if not self.flag: 
+                                            try:
+                                                    print("res in update: ",data)
+                                                    if data['type'] == "move":
+                                                        self.l.append([data['row'],data['col']])
+                                                        for i in range(3):
+                                                            for j in range(3):
+                                                                if [i, j] not in self.l:
+                                                                    self.buttons[i][j].config(state='normal')
+                                                        print("INSIDE UPDATE")
+                                                        if data['playerSymbol'] == 'X':
+                                                            color = 'red'
+                                                        else:
+                                                            color = 'blue'
+                                                        self.buttons[data['row']][data['col']].config(text=data['playerSymbol'], fg=color)
+                                                        self.flag=True
+                                                        self.buttons[data['row']][data['col']].config(state="disabled")
+                                                        self.nameLabel.config(fg="red",text="Your Play")
+                                            except Exception as e:
+                                                import traceback
+                                                traceback.print_exc()
+                                                print("Something went wrong:", str(e))
+
             except Exception as e:
+                import traceback
+                traceback.print_exc()
                 print("Something went wrong:", str(e))
-            # Schedule the function to be called again after 500 milliseconds
+                
             self.window.after(100, process_server_errors)
         # Initial call to start the loop
         process_server_errors()
@@ -548,4 +531,3 @@ class TicTacToeGame:
         self.window.after(0,self.reset_board)               
 if __name__ == "__main__":
     game = TicTacToeGame()
-
