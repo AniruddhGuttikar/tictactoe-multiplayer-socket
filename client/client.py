@@ -8,7 +8,6 @@ import speech as sp
 import getip as gi
 import pygame
 import speech_recognition as sr
-
 class TicTacToeGame:
     def __init__(self):
         self.window = tk.Tk()
@@ -21,7 +20,8 @@ class TicTacToeGame:
         self.mySymbol=""
         self.nameLabel=tk.Label()
         pygame.mixer.init()
-        pygame.mixer.music.load('multi-tic-tak-toe-socket\song.mp3')
+        pygame.mixer.music.load('client\song.mp3')
+        pygame.mixer.music.set_volume(0.5)
         pygame.mixer.music.play()
         self.host = socket.gethostname() 
         self.ip_current=socket.gethostbyname(self.host)
@@ -103,7 +103,6 @@ class TicTacToeGame:
         print(json.loads(data))
 
         self.window.configure(bg='#333333')
-
         center_frame = tk.Frame(self.window, bg='#A9A9A9')
         center_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
 
@@ -153,7 +152,6 @@ class TicTacToeGame:
                 messagebox.showinfo("Waiting", "waiting for opponent to join")
                 self.entry_alias.destroy()
                 self.start_button.destroy()
-
                 def process():
                     try:
                         # Set the socket to non-blocking mode
@@ -224,13 +222,9 @@ class TicTacToeGame:
             if self.mySymbol!='X':
                 self.nameLabel.config(text="Your play",fg="red")
             else:    
-                self.nameLabel.config(text="opponents play",fg="blue")
-            # Pass the callback function to process   
+                self.nameLabel.config(text="opponents play",fg="blue") # Pass the callback function to process   
         except Exception as e:
             print(f"An error occurred during GUI update: {str(e)}")
-
-
-
     def handle_click(self,row,col):
         if self.client.fileno() == -1:
             print("Socket closed")
@@ -246,7 +240,6 @@ class TicTacToeGame:
                     break
                 except BlockingIOError:
                     pass
-        
                 except Exception as e:
                     print(f"Error occurred during send operation: {e}")
                     pass
@@ -258,7 +251,6 @@ class TicTacToeGame:
                     break
                 except BlockingIOError:
                     pass
-        
                 except Exception as e:
                     print(f"Error occurred during recieve operation: {e}")
                     pass  
@@ -270,9 +262,8 @@ class TicTacToeGame:
                         color='red'
                     else:
                         color='blue'
-                    self.buttons[data['row']][data['col']].config(text=data['playerSymbol'], fg=color,state=tk.DISABLED)
+                    self.buttons[data['row']][data['col']].config(text=data['playerSymbol'], fg=color,state=tk.DISABLED)  #disable the button which is clicked
                     self.flag=False
-                    #disable the button 
                     self.nameLabel.config(text="opponents play",fg="blue")
                 elif data['type'] == 'gameEnd':
                     print("game End msg: ",data)
@@ -284,7 +275,6 @@ class TicTacToeGame:
                             self.window.after(0,self.reset_board)
                         else:
                             self.on_exit() 
-
                     elif data['draw']=='1':
                         messagebox.showinfo("draw","its a draw.. :)")
                         sp.speech("its a Draw")   
@@ -310,11 +300,10 @@ class TicTacToeGame:
         else:
             messagebox.showwarning('warning','sorry pal you cant click this other payer needs to play!') 
             sp.speech("sorry pal you cant click this other payer needs to play")
-       
 #-------------------------------------------------------------------------------------------------------------------------------#
     #voice message
     def sendMsg(self):
-        self.send_button.config(text="🎤",command=lambda: self.voiceMessage)
+        self.send_button.config(text="🎤", command=lambda: self.voiceMessage())
         print("sending encoded voice message") 
         self.window.after(0,self.send_message)
     def voiceMessage(self):
@@ -323,6 +312,7 @@ class TicTacToeGame:
         if res:
             msg=b""
             recognizer = sr.Recognizer()
+            self.send_button.config(text="❌",command=lambda: self.sendMsg())
             with sr.Microphone() as source:
                 print("Voice Typing started. Speak now...")
                 while True:
@@ -330,34 +320,31 @@ class TicTacToeGame:
                         audio = recognizer.listen(source, timeout=5)  # Adjust the timeout value (in seconds)
                         text = recognizer.recognize_google(audio)
                         print("You said:", text)
+                        self.message_entry.insert(tk.END,text)
                         break
                     except sr.UnknownValueError:
                         pass
                     except sr.RequestError as e:
                         print("Could not request results from Google Speech Recognition service; {0}".format(e))
-            self.message_entry.insert(tk.END,text)
-            self.send_button.config(text="❌",command=lambda: self.sendMsg)
-
+            
         #chat room
     def create_chatroom(self, master):
         chatroom_frame = tk.Frame(master, bg='#115C54')  # Create a frame for the chat room
         chatroom_frame.grid(row=0, column=3, padx=20, rowspan=7, sticky="nsew")  # Adjust column and rowspan as needed
-
         self.chat_display = tk.Text(chatroom_frame, state='disabled', width=30, height=30, bg='white', font=('Arial', 14))
         self.chat_display.grid(row=0, column=0, padx=15, pady=10, columnspan=5, sticky="nsew")
-
         self.message_entry = tk.Entry(chatroom_frame, width=40, font=('Arial', 14))
         self.message_entry.insert(0, "Type a message")
         self.message_entry.bind("<FocusIn>", self.on_entry_click)
         self.message_entry.bind("<FocusOut>", self.on_focus_out)
         self.message_entry.grid(row=4, column=0, padx=10, pady=5, sticky="nsew")
         self.message_entry.bind("<Return>", self.send_message_enter)
-
         self.send_button = tk.Button(chatroom_frame, text="➤", command=self.send_message, bg='#3B945E', fg='white', font=('Arial', 14))
         self.send_button.grid(row=4, column=1, padx=10, pady=5, sticky="e")
         self.chat_display.tag_configure('message_box', background='#DCF8C6', foreground='#000000', relief='raised')
-        self.chat_display.tag_configure('message_text', foreground='#000000')
-        
+        self.chat_display.tag_configure('message_text', foreground='#000000')  
+
+
     def send_message(self, event=None):
         message = self.message_entry.get().strip()
         if message:
@@ -368,38 +355,41 @@ class TicTacToeGame:
             self.chat_display.config(state='disabled')
             self.chat_display.see(tk.END)
             self.message_entry.delete(0, tk.END)
-
-
     def send_message_enter(self, event):
         self.send_message()
-
     def on_entry_click(self, event):
         if self.message_entry.get() == "Type a message":
             self.message_entry.delete(0, "end")
             #delete voice button
             self.send_button.config(command=self.send_message,text="➤")
             self.message_entry.config(fg="black")
-
     def on_focus_out(self, event):
         if self.message_entry.get() == "":
             self.message_entry.insert(0, "Type a message")
             self.send_button.config(command=self.voiceMessage,text="🎤")
             self.message_entry.config(fg="grey")    
-
     def display_message(self, message):
         self.chat_display.config(state='normal')
         self.chat_display.insert(tk.END, message)
         self.chat_display.config(state='disabled')
         self.chat_display.see(tk.END)  # Scroll to the bottom
-
 #----------------------------------------------------------------------------------------------#
     #exit and reset querries
-    def on_exit(self):
+    def on_exit(self,event=None):
+        
         result = messagebox.askyesno("Exit", "Are you sure you want to exit?")
         if result:
             self.client.send(json.dumps({'type': 'exit', 'alias': self.alias}).encode('utf-8'))
             self.window.destroy()
             exit(0)
+        else:
+            if event==True:
+                self.flag=False
+                for i in range(3):
+                    for j in range(3):
+                        if [i, j] not in self.l:
+                            self.buttons[i][j].config(state=tk.DISABLED)
+
 
 
     def handle_clicks(self):
@@ -416,18 +406,10 @@ class TicTacToeGame:
                     pass  # No data received, continue with non-blocking operations
                 print(data)
                 if data:
-                    # Check if there is data to be received from the server
-                    messages = data.decode('utf-8').split('}{')
-                    for message in messages:
-                        # Reconstruct each JSON object and load it
-                        if message.startswith('{'):
-                            if not message.endswith('}'):
-                                message += '}'
-                            try:
-                                data = json.loads(message)
-                            except json.decoder.JSONDecodeError as e:
-                                print(f"JSON Decode Error: {e}")
-                                # Handle the error as needed
+                    messages = data.decode('utf-8')
+                    json_array_string = f'[{messages.replace("}{", "},{")}]'
+                    messages=json.loads(json_array_string)
+                    for data in messages:
                         print("in handle clicks: ",data)
                         if data['type'] == 'exit':
                             messagebox.showinfo('Player Left', 'Opponent left the game')
@@ -465,7 +447,6 @@ class TicTacToeGame:
                                     self.window.after(0,self.reset_board)
                                 else:
                                     self.on_exit() 
-
                             elif data['draw']=='1':
                                 messagebox.showinfo("draw","its a draw.. :)")
                                 sp.speech("its a Draw")   
@@ -476,12 +457,12 @@ class TicTacToeGame:
                                     self.on_exit()  
                             else:
                                 messagebox.showinfo("Oops!!   You Lost")
-                                sp.con("Oops you lost it, better luck next time")
+                                sp.con(":(","Oops you lost it, better luck next time")
                                 r=messagebox.askyesno("Restart","restart the game ?  ")
                                 if r:
                                     self.window.after(0,self.reset_board)
                                 else:
-                                    self.on_exit()   
+                                    self.on_exit(True)   
                         elif data['type']=='move':
                                     if not self.flag: 
                                             try:
@@ -505,16 +486,13 @@ class TicTacToeGame:
                                                 import traceback
                                                 traceback.print_exc()
                                                 print("Something went wrong:", str(e))
-
             except Exception as e:
                 import traceback
                 traceback.print_exc()
-                print("Something went wrong:", str(e))
-                
+                print("Something went wrong:", str(e))     
             self.window.after(100, process_server_errors)
         # Initial call to start the loop
         process_server_errors()
-
     def reset_board(self):
         for i in range(3):
             for j in range(3):
