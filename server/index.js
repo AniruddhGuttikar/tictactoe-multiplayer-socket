@@ -16,7 +16,7 @@ const ongoingGames = new Map()
 // Handle new connections
 server.on('connection', async (socket) => {
     
-    const ongoingGamesArray = [...ongoingGames.values.gameName]
+    const ongoingGamesArray = [...ongoingGames.values().gameName]
 
     const aliasMessage = {
         type: 'alias',
