@@ -1,5 +1,6 @@
 import net from 'net'
 import dotenv from 'dotenv'
+import gameSession from './gameSession'
 
 dotenv.config()
 
@@ -9,20 +10,17 @@ const HOST = process.env.HOST; // Listen on all network interfaces
 // Create a TCP server
 const server = net.createServer();
 
-const clients = [];
-
-const gameState = [
-    ['0', '0', '0'], 
-    ['0', '0', '0'],
-    ['0', '0', '0'],
-];
+//contains sessionId and game
+const ongoingGames = new Map()
 
 // Handle new connections
 server.on('connection', async (socket) => {
     
+    const ongoingGamesArray = [...ongoingGames.values.gameName]
+
     const aliasMessage = {
         type: 'alias',
-        message: 'enter the username'
+        message: 'enter the username',
     }
     socket.write(JSON.stringify(aliasMessage));
 
@@ -130,30 +128,6 @@ server.on('connection', async (socket) => {
                     clients.splice(index, 1);
                 }
             } 
-            // const allPlayersReady = clients.every(client => client.isRestart)
-            // if (allPlayersReady && clients.length === 2) {
-            //     console.log("Restarting the game")
-            //     const restartInfo = {
-            //         type: 'restart',
-            //         message: 1,
-            //     }
-            //     clients.forEach(client => {
-            //         if (!client.destroyed) {
-            //             socket.write(JSON.stringify(restartInfo));
-            //         }
-            //     })
-            // } else {
-            //     console.log("can't restart the game yet")
-            //     const restartInfo = {
-            //         type: 'restart',
-            //         message: 0,
-            //     }
-            //     clients.forEach(client => {
-            //         if (!client.destroyed) {
-            //             socket.write(JSON.parse(restartInfo))
-            //         }
-            //     })
-            // }
         }
     });
 
@@ -195,132 +169,6 @@ server.on('connection', async (socket) => {
     });
 });
 
-const isValidMove = (row, col) => {
-    return gameState[row][col] === '0'
-}
-
-//return winSeq and the winSymbol
-const checkGameResult = () => { 
-        for (let i = 0; i < 3; i++) {
-            //check rows
-            if (gameState[i][0] !== '0' && gameState[i][0] === gameState[i][1] && gameState[i][1] === gameState[i][2]) {
-                return ({
-                    winSymbol: gameState[i][0],
-                    winSeq: {
-                        row1: i, col1: 0,
-                        row2: i, col2: 1,
-                        row3: i, col3: 2,
-                    }
-                })
-            }
-        } 
-        //check columns
-        for (let i = 0; i < 3; i++) {
-            if (gameState[0][i] !== '0' && gameState[0][i] === gameState[1][i] && gameState[1][i] === gameState[2][i]) {
-                return ({
-                    winSymbol: gameState[0][i],
-                    winSeq: {
-                        row1: 0, col1: i,
-                        row2: 1, col2: i,
-                        row3: 2, col3: i,
-                    }
-                }) 
-            }
-        }
-        //check each diagonals
-        if (gameState[0][0] !== '0' && gameState[0][0] === gameState[1][1] && gameState[1][1] === gameState[2][2]) {
-            return ({
-                winSymbol: gameState[0][0],
-                winSeq: {
-                    row1: 0, col1: 0,
-                    row2: 1, col2: 1,
-                    row3: 2, col3: 2,
-                }
-            })
-        }
-
-        if (gameState[0][2] !== '0' && gameState[0][2] === gameState[1][1] && gameState[1][1] === gameState[2][0]) {
-            return ({
-                winSymbol: gameState[0][2],
-                winSeq: {
-                    row1: 0, col1: 2,
-                    row2: 1, col2: 1,
-                    row3: 2, col3: 0,
-                }
-            })
-        }
-        
-        let isDraw = true;
-        for (let i = 0; i < 3; i++) {
-            for (let j = 0; j < 3; j++) {
-                if (gameState[i][j] === '0') {
-                    isDraw = false;
-                    break;
-                }
-            }
-            if (!isDraw) {
-                break;
-            }
-        }
-        if (isDraw) {
-            return 'draw'; 
-        }
-        
-    return 'ongoing';
-}
-const broadcastGameState = (row, col, playerSymbol) => {
-    const gameStateMsg = {
-        type: "move",
-        playerSymbol,
-        row,
-        col, 
-    };
-    clients.forEach((client) => {
-        if (!client.destroyed) {
-            client.write(JSON.stringify(gameStateMsg));
-        }
-    });
-}
-
-const handleGameEnd = (result) => {
-    //result is 'draw' | struct
-    if (result === 'draw') {
-        const endMsg = {
-            type: "gameEnd",
-            draw: '1', 
-        }
-        clients.forEach(client => {
-            if (!client.destroyed) {
-                client.write(JSON.stringify(endMsg))
-            }
-        })
-    } else {
-
-        const winAlias = clients.find(client => client.playerSymbol === result.winSymbol).playerName
-        const endMsg = {
-            ... result,
-            type: "gameEnd",
-            draw: '0',
-            winAlias,
-        }
-        clients.forEach(client => {
-            if (!client.destroyed) {
-                client.write(JSON.stringify(endMsg))
-            }
-        })
-    }
-    
-    resetGame()
-}
-
-const resetGame = () => {
-    for (let i = 0; i < 3; i++) {
-        for (let j = 0; j < 3; j++) {
-            gameState[i][j] = '0';
-        }
-    }
-    //clients.length = 0;
-}
 
 // Start the server
 server.listen(PORT, HOST, () => {
