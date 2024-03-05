@@ -1,6 +1,7 @@
 import net from 'net'
 import dotenv from 'dotenv'
 import gameSession from './gameSession'
+import { on } from 'events';
 
 dotenv.config()
 
@@ -10,26 +11,85 @@ const HOST = process.env.HOST; // Listen on all network interfaces
 // Create a TCP server
 const server = net.createServer();
 
-//contains sessionId and game
-const ongoingGames = new Map()
+// list contains all the ongoing games
+const ongoingGames = []
 
 // Handle new connections
 server.on('connection', async (socket) => {
-    
-    const ongoingGamesArray = [...ongoingGames.values().gameName]
 
+    
     const aliasMessage = {
         type: 'alias',
         message: 'enter the username',
     }
-    socket.write(JSON.stringify(aliasMessage));
-
     // Handle data from clients
     socket.on('data', async (data) => {
-        const {type, message} = JSON.parse(data);
+        const { type } = data
+
+        if (type === "createGame") {
+            let alreadyExists = false
+            const gameName = data.message
+
+            ongoingGames.forEach(game => {
+                if (game.gameName === gameName) {
+                    alreadyExists = true
+                }
+            })
+            if (alreadyExists) {
+                const nameError = {
+                    type: "nameError",
+                    message: "gamename already exists"
+                }
+                socket.write(JSON.stringify(nameError))
+                return
+            }
+            const newGame = new gameSession(message, socket)
+            ongoingGames.push(newGame)
+            const createInfo = {
+                type: "gameCreated",
+                message: "game has started"
+            }
+            socket.write(JSON.stringify(createInfo))
+        }
+
+        if (type === "joinGame") {
+            const gamesList = {}
+            for (const game of ongoingGames) {
+                gamesList[game.gameName] = game.players.length
+            }
+            const gamesInfo = {
+                type: "gamesList",
+                list: gamesList
+            }
+            socket.write(JSON.stringify(gamesInfo))
+        }
+// joinRoom or inspectRoom
+        if (type === "joinRoom") {
+            const roomName = data.message
+            
+            for (const game of ongoingGames) {
+                if (game.gameName === roomName) {
+                    let isAdded = game.addPlayer(socket)
+                }
+            }
+            
+        }
+        
+        if (type === "inspectRoom") {
+            const roomName = data.message
+            
+            for (const game of ongoingGames) {
+                if (game.gameName === roomName) {
+                    let isAdded = game.addSpectator(socket)
+                }
+            }
+
+            
+        }
 
         if (type === "alias") {
-            const playerName = message
+            const playerName = data.message
+            const roomName = data.gameRoom
 
             if (clients.length < 2) {
                 if (clients.length === 0) {
@@ -165,7 +225,6 @@ server.on('connection', async (socket) => {
         if (clients.length) {
             clients[0].write(JSON.stringify(closeInfo))
         }
-        resetGame()
     });
 });
 

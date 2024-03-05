@@ -1,14 +1,14 @@
 class gameSession {
-    constructor(sessionId, gameName) {
-        this.sessionId = sessionId
-        this.players = []
+    constructor(gameName, host) {
         this.gameName = gameName
+        this.host = host
+        this.players = [host]
+        this.spectators = []
         this.board = [
             ['0', '0', '0'], 
             ['0', '0', '0'],
             ['0', '0', '0'],
         ];
-
     }
     
     addPlayer(player) {
@@ -19,9 +19,20 @@ class gameSession {
             return false
         }
     }
+
+    addSpectator(spectator) {
+        if (!this.spectators.includes(spectator)) {
+            this.spectators.push(spectator)
+            return true
+        } else {
+            return false
+        }
+    }
+
     returnPlayers() {
         return [...this.players]
     }
+
     removePlayer(id) {
         const index = this.players.findIndex(player => player.remoteAddress)
         if (index != -1) {
@@ -34,9 +45,11 @@ class gameSession {
             return false
         }
     }
+
     isValidMove = (row, col) => {
         return this.board[row][col] === '0'
     }
+
     checkGameResult = () => { 
         for (let i = 0; i < 3; i++) {
             //check rows
@@ -106,6 +119,7 @@ class gameSession {
         
     return 'ongoing';
     }
+
     handleGameEnd = (result) => {
         //result is 'draw' | struct
         if (result === 'draw') {
@@ -136,6 +150,7 @@ class gameSession {
         
         this.resetGame()
     }
+
     resetGame = () => {
         for (let i = 0; i < 3; i++) {
             for (let j = 0; j < 3; j++) {
