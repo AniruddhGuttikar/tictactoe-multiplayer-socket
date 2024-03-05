@@ -1,9 +1,43 @@
-class gameSession {
-    constructor(gameName, host) {
+import { truncate } from "fs"
+import net from "net"
+
+type Playersymbol = 'X' | 'O'
+
+interface Player {
+    socket: net.Socket
+    symbol: Playersymbol
+    name: string
+    isDestroyed: boolean
+}
+
+type gameEnd =
+  | string
+  | {
+      winSymbol: string;
+      winSeq: {
+        row1: number;
+        row2: number;
+        row3: number;
+        col1: number;
+        col2: number;
+        col3: number;
+      };
+    };
+
+class GameSession {
+    gameName: string
+    host: Player
+    players: Player[]
+    spectators: Player[]
+    board: string[][]
+    turn: Playersymbol
+
+    constructor(gameName: string, host: Player) {
         this.gameName = gameName
         this.host = host
         this.players = [host]
         this.spectators = []
+        this.turn = 'X'  
         this.board = [
             ['0', '0', '0'], 
             ['0', '0', '0'],
@@ -11,16 +45,16 @@ class gameSession {
         ];
     }
     
-    addPlayer(player) {
-        if (this.players.size < 2) {
-            this.players.push(player)
+    addPlayer(Player: Player): boolean {
+        if (this.players.length < 2) {
+            this.players.push(Player)
             return true
         } else {
             return false
         }
     }
 
-    addSpectator(spectator) {
+    addSpectator(spectator: Player): boolean {
         if (!this.spectators.includes(spectator)) {
             this.spectators.push(spectator)
             return true
@@ -29,28 +63,28 @@ class gameSession {
         }
     }
 
-    returnPlayers() {
+    returnPlayers(): Player[] {
         return [...this.players]
     }
 
-    removePlayer(id) {
-        const index = this.players.findIndex(player => player.remoteAddress)
-        if (index != -1) {
-            this.players.splice(index, 1)
-            return {
-                status: 'true',
-                message: 'player removed successfully'
-            }
-        } else {
-            return false
-        }
+    removePlayer(player: Player): void {
+        this.players = this.players.filter(p => p !== player);
     }
 
-    isValidMove = (row, col) => {
+    isValidMove(row: number, col: number): boolean {
         return this.board[row][col] === '0'
     }
 
-    checkGameResult = () => { 
+    makeMove(row: number, col: number): boolean {
+        if (this.isValidMove(row, col)) {
+            this.board[row][col] = this.turn
+            this.turn = this.turn === "X" ? "O" : "X" 
+            return true
+        }
+        return false
+    }
+
+    checkGameResult(): gameEnd { 
         for (let i = 0; i < 3; i++) {
             //check rows
             if (this.board[i][0] !== '0' && this.board[i][0] === this.board[i][1] && this.board[i][1] === this.board[i][2]) {
@@ -120,30 +154,40 @@ class gameSession {
     return 'ongoing';
     }
 
-    handleGameEnd = (result) => {
+    handleGameEnd = (result: gameEnd) => {
         //result is 'draw' | struct
         if (result === 'draw') {
             const endMsg = {
                 type: "gameEnd",
                 draw: '1', 
             }
-            this.players.forEach(player => {
-                if (!player.destroyed) {
-                    player.write(JSON.stringify(endMsg))
+            this.players.forEach(p => {
+                if (!p.socket.destroyed) {
+                    p.socket.write(JSON.stringify(endMsg))
                 }
             })
         } else {
-    
-            const winAlias = this.players.find(player => player.playerSymbol === result.winSymbol).playerName
+            const winAlias = this.players.find(p => p.name === result)?.name
             const endMsg = {
-                ... result,
+                ...(result as { winSymbol: string; winSeq: {        
+                    row1: number;
+                    row2: number;
+                    row3: number;
+                    col1: number;
+                    col2: number;
+                    col3: number;}}),
                 type: "gameEnd",
                 draw: '0',
                 winAlias,
             }
-            this.players.forEach(player => {
-                if (!player.destroyed) {
-                    player.write(JSON.stringify(endMsg))
+            this.players.forEach(p => {
+                if (!p.socket.destroyed) {
+                    p.socket.write(JSON.stringify(endMsg))
+                }
+            })
+            this.spectators.forEach(p => {
+                if (!p.socket.destroyed) {
+                    p.socket.write(JSON.stringify(endMsg))
                 }
             })
         }
@@ -160,4 +204,4 @@ class gameSession {
     }
 }
 
-export default gameSession
+export default GameSession

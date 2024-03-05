@@ -1,7 +1,7 @@
 import net from 'net'
 import dotenv from 'dotenv'
-import gameSession from './gameSession'
-import { on } from 'events';
+import gameSession from './gameSession.js'
+
 
 dotenv.config()
 
@@ -12,7 +12,7 @@ const HOST = process.env.HOST; // Listen on all network interfaces
 const server = net.createServer();
 
 // list contains all the ongoing games
-const ongoingGames = []
+const ongoingGames: gameSession[] = []
 
 // Handle new connections
 server.on('connection', async (socket) => {
@@ -23,7 +23,7 @@ server.on('connection', async (socket) => {
         message: 'enter the username',
     }
     // Handle data from clients
-    socket.on('data', async (data) => {
+    socket.on('data', async (data: any) => {
         const { type } = data
 
         if (type === "createGame") {
