@@ -1,34 +1,32 @@
-import { truncate } from "fs"
 import net from "net"
 
 type Playersymbol = 'X' | 'O'
 
-interface Player {
+export interface Player {
     socket: net.Socket
     symbol: Playersymbol
-    name: string
-    isDestroyed: boolean
+    name?: string
 }
 
-type gameEnd =
-  | string
-  | {
-      winSymbol: string;
-      winSeq: {
-        row1: number;
-        row2: number;
-        row3: number;
-        col1: number;
-        col2: number;
-        col3: number;
-      };
+type gameEndInfo = {
+    winSymbol: string;
+    winSeq: {
+      row1: number;
+      row2: number;
+      row3: number;
+      col1: number;
+      col2: number;
+      col3: number;
     };
+}
+
+type gameEnd = string | gameEndInfo
 
 class GameSession {
     gameName: string
     host: Player
     players: Player[]
-    spectators: Player[]
+    spectators: net.Socket[]
     board: string[][]
     turn: Playersymbol
 
@@ -54,7 +52,7 @@ class GameSession {
         }
     }
 
-    addSpectator(spectator: Player): boolean {
+    addSpectator(spectator: net.Socket): boolean {
         if (!this.spectators.includes(spectator)) {
             this.spectators.push(spectator)
             return true
@@ -166,16 +164,15 @@ class GameSession {
                     p.socket.write(JSON.stringify(endMsg))
                 }
             })
+            this.spectators.forEach(p => {
+                if (!p.destroyed) {
+                    p.write(JSON.stringify(endMsg))
+                }
+            })
         } else {
-            const winAlias = this.players.find(p => p.name === result)?.name
+            const winAlias = this.players.find(p => p.symbol === (result as gameEndInfo).winSymbol)?.name
             const endMsg = {
-                ...(result as { winSymbol: string; winSeq: {        
-                    row1: number;
-                    row2: number;
-                    row3: number;
-                    col1: number;
-                    col2: number;
-                    col3: number;}}),
+                ...(result as gameEndInfo),
                 type: "gameEnd",
                 draw: '0',
                 winAlias,
@@ -186,12 +183,11 @@ class GameSession {
                 }
             })
             this.spectators.forEach(p => {
-                if (!p.socket.destroyed) {
-                    p.socket.write(JSON.stringify(endMsg))
+                if (!p.destroyed) {
+                    p.write(JSON.stringify(endMsg))
                 }
             })
         }
-        
         this.resetGame()
     }
 
@@ -201,6 +197,7 @@ class GameSession {
                 this.board[i][j] = '0';
             }
         }
+        this.turn = 'X'
     }
 }
 

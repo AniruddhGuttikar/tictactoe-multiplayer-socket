@@ -1,27 +1,21 @@
 import net from 'net'
 import dotenv from 'dotenv'
-import gameSession from './gameSession.js'
-
+import GameSession, { Player } from './gameSession.js'
+import { spec } from 'node:test/reporters'
 
 dotenv.config()
 
-const PORT = process.env.PORT; // Choose a port for the server
-const HOST = process.env.HOST; // Listen on all network interfaces
+const PORT = parseInt(process.env.PORT || '3000') // Choose a port for the server
+const HOST = process.env.HOST // Listen on all network interfaces
 
 // Create a TCP server
 const server = net.createServer();
 
 // list contains all the ongoing games
-const ongoingGames: gameSession[] = []
+const ongoingGames: GameSession[] = []
 
 // Handle new connections
 server.on('connection', async (socket) => {
-
-    
-    const aliasMessage = {
-        type: 'alias',
-        message: 'enter the username',
-    }
     // Handle data from clients
     socket.on('data', async (data: any) => {
         const { type } = data
@@ -43,17 +37,23 @@ server.on('connection', async (socket) => {
                 socket.write(JSON.stringify(nameError))
                 return
             }
-            const newGame = new gameSession(message, socket)
+            const player: Player = {
+                socket,
+                symbol: 'X'
+            }
+            const newGame = new GameSession(gameName, player)
             ongoingGames.push(newGame)
             const createInfo = {
                 type: "gameCreated",
                 message: "game has started"
             }
             socket.write(JSON.stringify(createInfo))
+            return
         }
 
+// need to send the list of all the games availabe to the joinee
         if (type === "joinGame") {
-            const gamesList = {}
+            const gamesList: {[key: string]: number} = {}
             for (const game of ongoingGames) {
                 gamesList[game.gameName] = game.players.length
             }
@@ -62,80 +62,65 @@ server.on('connection', async (socket) => {
                 list: gamesList
             }
             socket.write(JSON.stringify(gamesInfo))
+            return
         }
 // joinRoom or inspectRoom
         if (type === "joinRoom") {
             const roomName = data.message
-            
-            for (const game of ongoingGames) {
-                if (game.gameName === roomName) {
-                    let isAdded = game.addPlayer(socket)
-                }
+            const gameRoom = returnGame(roomName)
+            const player: Player = {
+                socket,
+                symbol: 'O'
             }
-            
+            gameRoom?.addPlayer(player)
+            return
         }
         
         if (type === "inspectRoom") {
             const roomName = data.message
+            const gameRoom = returnGame(roomName)
+            const spectator = socket
+            gameRoom?.addSpectator(spectator)
             
-            for (const game of ongoingGames) {
-                if (game.gameName === roomName) {
-                    let isAdded = game.addSpectator(socket)
-                }
+            const boardStateMsg = {
+                type: "boardState",
+                boardState: gameRoom?.board
             }
-
-            
+            spectator.write(JSON.stringify(boardStateMsg))
+            return
         }
 
         if (type === "alias") {
             const playerName = data.message
             const roomName = data.gameRoom
 
-            if (clients.length < 2) {
-                if (clients.length === 0) {
-                    socket.playerSymbol = 'X'
-                } else {
-                    socket.playerSymbol = clients[0].playerSymbol === 'X' ? 'O' : 'X'
-                }
-                clients.push(socket);
-            } else {
-                console.error("Room is already full");
-                socket.destroy({
-                    type: 'roomFullError',
-                    message: 'room is already full'
-                })
+            // get the gameRoom of the player and update their name
+            const gameRoom = returnGame(roomName)
+            const player = gameRoom?.players.find(player => player.socket.remoteAddress === socket.remoteAddress)
+            if (!player) {
+                console.error("player doesn't exist")
                 return
             }
+            player.name = playerName
 
-            if (clients.length > 1 && playerName === clients[0].playerName) {
-                const errorInfo = {
-                    type: 'nameError',
-                    message: 'please choose a different username'
-                }
-                socket.write(JSON.stringify(errorInfo))
-            } else {
-                socket.playerName = playerName
-                const joinInfo = {
-                    type: 'join',
-                    user: socket.playerName,
-                    playerSymbol: socket.playerSymbol,
-                }
-                console.log(`${socket.playerName} has joined the game`)
-                clients.forEach(client => {
-                    if (!client.destroyed) {
-                        client.write(JSON.stringify(joinInfo))
-                        console.log(`sending .... ${client.playerName} first time`)
-                    }
-                })
-                if (clients.length === 2) {
-                    clients[1].write(JSON.stringify({
-                        type: 'join',
-                        user: clients[0].playerName,
-                        playerSymbol: clients[0].playerSymbol,
-                    }))
-                    console.log(`sending ${clients[1].playerName} second time`)
-                }
+            const joinInfo = {
+                type: "join",
+                user: player.name,
+                playerSymbol: player.symbol
             }
+            // if host just send them back their own joinInfo
+            if (gameRoom?.host.name === player.name) {
+                player.socket.write(JSON.stringify(joinInfo))
+                return
+            }
+            // if opponet then send opponent both the host and the apponent the joinInfo
+            // sending opponet their own info - first time
+            player.socket.write(JSON.stringify(joinInfo))
+            // sending host the - second time
+            gameRoom?.host.socket.write(JSON.stringify(joinInfo))
+            // sending opponent the host info -second time
+            
+
         }
 
         if (type === "chat") {
@@ -228,8 +213,18 @@ server.on('connection', async (socket) => {
     });
 });
 
+const returnGame = (gameName: string): GameSession | undefined => {
+    for (const game of ongoingGames) {
+        if (game.gameName === gameName) {
+            return game
+        }
+    }
+    console.error("game room not found")
+    return undefined
+}
+
 
 // Start the server
-server.listen(PORT, HOST, () => {
+server.listen(PORT, HOST, (): void => {
     console.log(`Server listening on ${HOST}:${PORT}`);
 });
