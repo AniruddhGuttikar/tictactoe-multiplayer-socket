@@ -80,6 +80,41 @@ server.on('connection', async (socket) => {
             return
         }
 
+        if (type === "inspectRoom") {
+            const {gameRoom} = data
+
+            const game = returnGame(gameRoom)
+            if (!game) {
+                console.error("game not found")
+                return
+            }
+
+            const isAdded = game.addSpectator(socket)
+            if (isAdded) {
+                const spectatorJoinInfo = {
+                    type: "spectatorJoin",
+                    count: game.spectators.length
+                }
+                console.log(`${game.gameName}: a wild spectator has been found lurking around`)
+
+                // send all the players updated spectator count
+                game.players.forEach(player => {
+                    player.socket.write(JSON.stringify(spectatorJoinInfo))
+                })
+
+                //send spectator the currant board state
+                const boardStateMsg = {
+                    type: "boardState",
+                    boardState: game.board
+                }
+                socket.write(JSON.stringify(boardStateMsg))
+            } else {
+                console.log(`${game.gameName}: couldn't add the spectator`)
+                return
+            }
+            return
+        }
+
         if (type === "alias") {
             const {gameRoom, message: playerName} = data
 
@@ -112,8 +147,13 @@ server.on('connection', async (socket) => {
             // sending host the - second time
             game.host.socket.write(JSON.stringify(joinInfo))
             // sending opponent the host info -second time
-            
-
+            const hostInfo = {
+                type: "join",
+                user: game.host.name,
+                playerSymbol: game.host.symbol
+            }
+            player.socket.write(JSON.stringify(hostInfo))
+            return
         }
 
         if (type === "chat") {
@@ -136,7 +176,7 @@ server.on('connection', async (socket) => {
             game.players.forEach(p => {
                 p.socket.write(JSON.stringify(chatInfo))
             })
-            console.log(`${player.name}: ${message}`)
+            console.log(`in ${game.gameName}\n${player.name}: ${message}`)
             return
         }
 
@@ -151,13 +191,13 @@ server.on('connection', async (socket) => {
                 return
             }
 
-            console.log(`move made by ${player.name}: row: ${row} col: ${col}`)
+            console.log(`${game.gameName}\nmove made by ${player.name}: row: ${row} col: ${col}`)
 
             const isSuccess = game.makeMove(row, col)
 
             // send the moveInfo to all the players and spectators 
             if (!isSuccess) {
-                console.log("invalid move")
+                console.log(`${game.gameName}: invalid move`)
                 const invalidMoveError = {
                     type: "invalidMoveError",
                     message: "invalid move",
@@ -189,41 +229,7 @@ server.on('connection', async (socket) => {
 
             if (!isRestart) {
                 socket.destroy()
-                console.log(`${player.name} has been kicked out of the game`)
-            }
-        }
-
-        if (type === "inspectRoom") {
-            const {gameRoom} = data
-
-            const game = returnGame(gameRoom)
-            if (!game) {
-                console.error("game not found")
-                return
-            }
-
-            const isAdded = game.addSpectator(socket)
-            if (isAdded) {
-                const spectatorJoinInfo = {
-                    type: "spectatorJoin",
-                    count: game.spectators.length
-                }
-                console.log("a wild spectator has been found lurking around")
-
-                // send all the players updated spectator count
-                game.players.forEach(player => {
-                    player.socket.write(JSON.stringify(spectatorJoinInfo))
-                })
-
-                //send spectator the currant board state
-                const boardStateMsg = {
-                    type: "boardState",
-                    boardState: game.board
-                }
-                socket.write(JSON.stringify(boardStateMsg))
-            } else {
-                console.log("couldn't add the spectator")
-                return
+                console.log(`${game.gameName}\n${player.name} has been kicked out of the game`)
             }
         }
     });
@@ -254,7 +260,7 @@ server.on('connection', async (socket) => {
 
             // update the spectator list
             if (game) {
-                console.log("spectator left the game")
+                console.log(`${game.gameName}: a spectator left the game`)
                 game.spectators = game.spectators.filter(sp => sp.remoteAddress !== socket.remoteAddress)
                 const spectatorLeftInfo = {
                     type: "spectatorLeft",
@@ -264,12 +270,12 @@ server.on('connection', async (socket) => {
                     player.socket.write(JSON.stringify(spectatorLeftInfo))
                 })
             } else {
-                console.error("i have no idea who just left")
+                console.error(`i have no idea who just left`)
             }
             return
         }
 
-        console.log(`${player.name} has disconnected`);
+        console.log(`${game.gameName}: ${player.name} has disconnected`);
 
         // Remove the player from the game
         game.players = game.players.filter(p => p !== player)
