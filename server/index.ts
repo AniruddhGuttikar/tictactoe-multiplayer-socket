@@ -1,7 +1,8 @@
 import net from 'net'
 import dotenv from 'dotenv'
 import GameSession, { Player } from './gameSession.js'
-import { spec } from 'node:test/reporters'
+import { Socket } from 'dgram'
+
 
 dotenv.config()
 
@@ -21,18 +22,14 @@ server.on('connection', async (socket) => {
         const { type } = data
 
         if (type === "createGame") {
-            let alreadyExists = false
-            const gameName = data.message
+            const { gameRoom } = data
 
-            ongoingGames.forEach(game => {
-                if (game.gameName === gameName) {
-                    alreadyExists = true
-                }
-            })
-            if (alreadyExists) {
+            const game = returnGame(gameRoom)
+            // if the game with the same name already exists
+            if (game) {
                 const nameError = {
                     type: "nameError",
-                    message: "gamename already exists"
+                    message: "game name already exists"
                 }
                 socket.write(JSON.stringify(nameError))
                 return
@@ -41,7 +38,8 @@ server.on('connection', async (socket) => {
                 socket,
                 symbol: 'X'
             }
-            const newGame = new GameSession(gameName, player)
+            const newGame = new GameSession(gameRoom, player)
+            newGame.host = player
             ongoingGames.push(newGame)
             const createInfo = {
                 type: "gameCreated",
@@ -51,7 +49,7 @@ server.on('connection', async (socket) => {
             return
         }
 
-// need to send the list of all the games availabe to the joinee
+        // need to send the list of all the games available to the joinee
         if (type === "joinGame") {
             const gamesList: {[key: string]: number} = {}
             for (const game of ongoingGames) {
@@ -64,43 +62,36 @@ server.on('connection', async (socket) => {
             socket.write(JSON.stringify(gamesInfo))
             return
         }
-// joinRoom or inspectRoom
+        // joinRoom or inspectRoom
         if (type === "joinRoom") {
-            const roomName = data.message
-            const gameRoom = returnGame(roomName)
+            const { gameRoom } = data
+            const game = returnGame(gameRoom)
+            if (!game) {
+                socket.destroy()
+                console.log("invalid game room")
+                return
+            }
+
             const player: Player = {
                 socket,
                 symbol: 'O'
             }
-            gameRoom?.addPlayer(player)
-            return
-        }
-        
-        if (type === "inspectRoom") {
-            const roomName = data.message
-            const gameRoom = returnGame(roomName)
-            const spectator = socket
-            gameRoom?.addSpectator(spectator)
-            
-            const boardStateMsg = {
-                type: "boardState",
-                boardState: gameRoom?.board
-            }
-            spectator.write(JSON.stringify(boardStateMsg))
+            game.addPlayer(player)
             return
         }
 
         if (type === "alias") {
-            const playerName = data.message
-            const roomName = data.gameRoom
+            const {gameRoom, message: playerName} = data
 
             // get the gameRoom of the player and update their name
-            const gameRoom = returnGame(roomName)
-            const player = gameRoom?.players.find(player => player.socket.remoteAddress === socket.remoteAddress)
-            if (!player) {
-                console.error("player doesn't exist")
+            const game = returnGame(gameRoom)
+            const player = returnPlayer(game, socket)
+
+            if (!(game && player)) {
+                console.error("couldn't find the Game or the player")
                 return
             }
+
             player.name = playerName
 
             const joinInfo = {
@@ -108,108 +99,221 @@ server.on('connection', async (socket) => {
                 user: player.name,
                 playerSymbol: player.symbol
             }
+
             // if host just send them back their own joinInfo
-            if (gameRoom?.host.name === player.name) {
+            if (game.host.name === player.name) {
                 player.socket.write(JSON.stringify(joinInfo))
                 return
             }
-            // if opponet then send opponent both the host and the apponent the joinInfo
-            // sending opponet their own info - first time
+
+            // if opponent then send opponent both the host and the opponent the joinInfo
+            // sending opponent their own info - first time
             player.socket.write(JSON.stringify(joinInfo))
             // sending host the - second time
-            gameRoom?.host.socket.write(JSON.stringify(joinInfo))
+            game.host.socket.write(JSON.stringify(joinInfo))
             // sending opponent the host info -second time
             
 
         }
 
         if (type === "chat") {
-            const chatData = {
+            const {message, gameRoom} = data
+
+            const game = returnGame(gameRoom)
+            const player = returnPlayer(game, socket)
+
+            if (!(game && player)) {
+                console.error("couldn't find the Game or the player")
+                return
+            }
+
+            const chatInfo = {
                 type: "chat",
-                user: socket.playerName,
+                user: player?.name,
                 message,
             }
 
-            clients.forEach((client) => {
-                if (client !== socket && !client.destroyed) {
-                    client.write(JSON.stringify(chatData));
-                }
-            });
-            console.log(`${socket.playerName}: ${message}`)
+            game.players.forEach(p => {
+                p.socket.write(JSON.stringify(chatInfo))
+            })
+            console.log(`${player.name}: ${message}`)
+            return
         }
 
         if (type === "move") {
-            const {row, col} = message;
-            console.log('data received: ', JSON.parse(data))
-            console.log(`${socket.playerSymbol} has made a move`)
-            console.log('row, col', row, col)
-            if (isValidMove(row, col)) {
-                gameState[row][col] = socket.playerSymbol
-                broadcastGameState(row, col, socket.playerSymbol)
-            } else {
+            const {row, col, gameRoom} = data.message
+
+            const game = returnGame(gameRoom)
+            const player = returnPlayer(game, socket)
+
+            if (!(game && player)) {
+                console.error("couldn't find the Game or the player")
+                return
+            }
+
+            console.log(`move made by ${player.name}: row: ${row} col: ${col}`)
+
+            const isSuccess = game.makeMove(row, col)
+
+            // send the moveInfo to all the players and spectators 
+            if (!isSuccess) {
                 console.log("invalid move")
                 const invalidMoveError = {
                     type: "invalidMoveError",
                     message: "invalid move",
-                    player: socket.playerName,
+                    player: player.name,
                 }
                 socket.write(JSON.stringify(invalidMoveError))
+            } else {
+                game.broadcastMove(player.symbol, row, col)
             }
-            //gets ongoing | draw | the struct
-            const gameResult = checkGameResult()
 
+            // check if the game has ended 
+            const gameResult = game.checkGameResult()
             if (gameResult !== 'ongoing') {
-                handleGameEnd(gameResult)
+                game.handleGameEnd(gameResult)
             }
+            return
         }
 
         if (type === "restart") {
-            const isRestart = message;
-            socket.isRestart = isRestart === 1 ? true : false;
-            if (socket.isRestart === false) {
-                const index = clients.indexOf(socket);
+            const {message: isRestart, gameRoom} = data
+
+            const game = returnGame(gameRoom)
+            const player = returnPlayer(game, socket)
+
+            if (!(game && player)) {
+                console.error("couldn't find the Game or the player")
+                return
+            }
+
+            if (!isRestart) {
                 socket.destroy()
-                if (index !== -1) {
-                    clients.splice(index, 1);
+                console.log(`${player.name} has been kicked out of the game`)
+            }
+        }
+
+        if (type === "inspectRoom") {
+            const {gameRoom} = data
+
+            const game = returnGame(gameRoom)
+            if (!game) {
+                console.error("game not found")
+                return
+            }
+
+            const isAdded = game.addSpectator(socket)
+            if (isAdded) {
+                const spectatorJoinInfo = {
+                    type: "spectatorJoin",
+                    count: game.spectators.length
                 }
-            } 
+                console.log("a wild spectator has been found lurking around")
+
+                // send all the players updated spectator count
+                game.players.forEach(player => {
+                    player.socket.write(JSON.stringify(spectatorJoinInfo))
+                })
+
+                //send spectator the currant board state
+                const boardStateMsg = {
+                    type: "boardState",
+                    boardState: game.board
+                }
+                socket.write(JSON.stringify(boardStateMsg))
+            } else {
+                console.log("couldn't add the spectator")
+                return
+            }
         }
     });
 
-    // Handle client disconnection
+    // Handle client or spectator disconnection
     socket.on('close', () => {
-        console.log(`${socket.playerName} has disconnected`);
-        // Remove the client from the list
-        const index = clients.indexOf(socket);
-        if (index !== -1) {
-            clients.splice(index, 1);
+        let player: Player | undefined
+        let game: GameSession | undefined
+
+        for (const g of ongoingGames) {
+            player = returnPlayer(g, socket) 
+            if (player) {
+                game = g
+                break
+            }
         }
-        const closeInfo = {
-            type: "playerLeft",
-            player: socket.playerName
+
+        // if player not found then it's the spectator who left the game
+        if (!(game && player)) {
+            // get the game where the spectator is present
+            for (const g of ongoingGames) {
+                for (const sp of g.spectators) {
+                    if (sp.remoteAddress === socket.remoteAddress) {
+                        game = g
+                    }
+                }
+            }
+
+            // update the spectator list
+            if (game) {
+                console.log("spectator left the game")
+                game.spectators = game.spectators.filter(sp => sp.remoteAddress !== socket.remoteAddress)
+                const spectatorLeftInfo = {
+                    type: "spectatorLeft",
+                    count: game.spectators.length,
+                }
+                game.players.forEach((player) => {
+                    player.socket.write(JSON.stringify(spectatorLeftInfo))
+                })
+            } else {
+                console.error("i have no idea who just left")
+            }
+            return
         }
-        if (clients.length) {
-            clients[0].write(JSON.stringify(closeInfo))
+
+        console.log(`${player.name} has disconnected`);
+
+        // Remove the player from the game
+        game.players = game.players.filter(p => p !== player)
+        
+        // if the player was the host and first to leave
+        if (game.host === player && game.players.length === 1) {
+            game.host = game.players[0]
+            game.host.symbol = 'X'
         }
-        resetGame()
-    });
+
+        // if the other player is still present 
+        if (game.players.length) {
+            const closeInfo = {
+                type: "playerLeft",
+                player: player.name
+            }
+            game.players[0].socket.write(JSON.stringify(closeInfo))
+            game.spectators.forEach(sp => {
+                sp.write(JSON.stringify(closeInfo))
+            })
+            game.resetGame()
+        } else {
+            // both the players left the game
+            console.log(`from ${game.gameName}: all left the game`)
+            // remove the game from the ongoingGames
+            let gindex = ongoingGames.findIndex(g => g === game)
+            if (gindex !== -1) {
+                ongoingGames.splice(gindex, 1)
+
+                const gameEndSpec = {
+                    type: "gameEndSpec",
+                    message: "current game has ended"
+                }
+                game.spectators.forEach(sp => {
+                    sp.write(JSON.stringify(gameEndSpec))
+                })
+            }
+        }
+    })
 
     // Handle errors
     socket.on('error', (err) => {
-        console.error('Socket error:', err.message);
-        console.log(`${socket.playerName} has disconnected`);
-        // Remove the client from the list
-        const index = clients.indexOf(socket);
-        if (index !== -1) {
-            clients.splice(index, 1);
-        }
-        const closeInfo = {
-            type: "playerLeft",
-            player: socket.playerName
-        }
-        if (clients.length) {
-            clients[0].write(JSON.stringify(closeInfo))
-        }
+        console.error("oopsies!! something went wrong: ", err.name, err.message)
+        socket.destroy()
     });
 });
 
@@ -223,6 +327,13 @@ const returnGame = (gameName: string): GameSession | undefined => {
     return undefined
 }
 
+const returnPlayer = (gameRoom: GameSession | undefined, ip: net.Socket): Player | undefined => {
+    if (gameRoom) {
+        return gameRoom.players.find(p => p.socket.remoteAddress === ip.remoteAddress)
+    } else {
+        return undefined
+    }
+}
 
 // Start the server
 server.listen(PORT, HOST, (): void => {

@@ -1,10 +1,10 @@
 import net from "net"
 
-type Playersymbol = 'X' | 'O'
+type PlayerSymbol = 'X' | 'O'
 
 export interface Player {
     socket: net.Socket
-    symbol: Playersymbol
+    symbol: PlayerSymbol
     name?: string
 }
 
@@ -28,7 +28,7 @@ class GameSession {
     players: Player[]
     spectators: net.Socket[]
     board: string[][]
-    turn: Playersymbol
+    turn: PlayerSymbol
 
     constructor(gameName: string, host: Player) {
         this.gameName = gameName
@@ -80,6 +80,21 @@ class GameSession {
             return true
         }
         return false
+    }
+
+    broadcastMove(playerSymbol: PlayerSymbol , row: number, col: number): void {
+        const moveInfo = {
+            type: "move",
+            playerSymbol,
+            row,
+            col,
+        }
+        for (const p of this.players) {
+            p.socket.write(JSON.stringify(moveInfo))
+        }
+        for (const s of this.spectators) {
+            s.write(JSON.stringify(moveInfo))
+        }
     }
 
     checkGameResult(): gameEnd { 
