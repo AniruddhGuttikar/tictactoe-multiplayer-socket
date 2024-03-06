@@ -2,12 +2,11 @@
   "name": "tictactoe-multiplayer-sockets",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "index.ts",
   "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "build": "npx tsc && node ./dist/index.js"
   },
   "keywords": [],
   "author": "",
@@ -16,6 +15,8 @@
     "dotenv": "^16.4.4"
   },
   "devDependencies": {
-    "nodemon": "^3.0.3"
+    "@types/node": "^20.11.24",
+    "nodemon": "^3.0.3",
+    "typescript": "^5.3.3"
   }
 }
