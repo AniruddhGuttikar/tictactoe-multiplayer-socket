@@ -3,9 +3,15 @@ import net from "net"
 type PlayerSymbol = 'X' | 'O'
 
 export interface Player {
+    id: string
     socket: net.Socket
     symbol: PlayerSymbol
     name?: string
+}
+
+export interface Spectator {
+    id: string
+    socket: net.Socket
 }
 
 type gameEndInfo = {
@@ -22,11 +28,11 @@ type gameEndInfo = {
 
 type gameEnd = string | gameEndInfo
 
-class GameSession {
+export default class GameSession {
     gameName: string
     host: Player
     players: Player[]
-    spectators: net.Socket[]
+    spectators: Spectator[]
     board: string[][]
     turn: PlayerSymbol
 
@@ -52,7 +58,7 @@ class GameSession {
         }
     }
 
-    addSpectator(spectator: net.Socket): boolean {
+    addSpectator(spectator: Spectator): boolean {
         if (!this.spectators.includes(spectator)) {
             this.spectators.push(spectator)
             return true
@@ -93,7 +99,7 @@ class GameSession {
             p.socket.write(JSON.stringify(moveInfo))
         }
         for (const s of this.spectators) {
-            s.write(JSON.stringify(moveInfo))
+            s.socket.write(JSON.stringify(moveInfo))
         }
     }
 
@@ -179,9 +185,9 @@ class GameSession {
                     p.socket.write(JSON.stringify(endMsg))
                 }
             })
-            this.spectators.forEach(p => {
-                if (!p.destroyed) {
-                    p.write(JSON.stringify(endMsg))
+            this.spectators.forEach(sp => {
+                if (!sp.socket.destroyed) {
+                    sp.socket.write(JSON.stringify(endMsg))
                 }
             })
         } else {
@@ -197,9 +203,9 @@ class GameSession {
                     p.socket.write(JSON.stringify(endMsg))
                 }
             })
-            this.spectators.forEach(p => {
-                if (!p.destroyed) {
-                    p.write(JSON.stringify(endMsg))
+            this.spectators.forEach(sp => {
+                if (!sp.socket.destroyed) {
+                    sp.socket.write(JSON.stringify(endMsg))
                 }
             })
         }
@@ -215,5 +221,3 @@ class GameSession {
         this.turn = 'X'
     }
 }
-
-export default GameSession

@@ -1,7 +1,6 @@
 import net from 'net'
 import dotenv from 'dotenv'
-import GameSession, { Player } from './gameSession.js'
-import { Socket } from 'dgram'
+import GameSession, { Player, Spectator } from './gameSession.js'
 
 
 dotenv.config()
@@ -17,12 +16,16 @@ const ongoingGames: GameSession[] = []
 
 // Handle new connections
 server.on('connection', async (socket) => {
-    // Handle data from clients
+    // Handle JSON.parse(data) from clients
+    console.log("joined: ", socket.remoteAddress)
+    const id: string = generateUniqueId()
+
     socket.on('data', async (data: any) => {
-        const { type } = data
+        console.log(`data received ${JSON.parse(data)}`)
+        const { type } = JSON.parse(data)
 
         if (type === "createGame") {
-            const { gameRoom } = data
+            const { message: gameRoom } = JSON.parse(data)
 
             const game = returnGame(gameRoom)
             // if the game with the same name already exists
@@ -32,20 +35,24 @@ server.on('connection', async (socket) => {
                     message: "game name already exists"
                 }
                 socket.write(JSON.stringify(nameError))
+                console.log(`data sent: ${nameError}`)
                 return
             }
             const player: Player = {
+                id,
                 socket,
-                symbol: 'X'
+                symbol: 'X',
             }
             const newGame = new GameSession(gameRoom, player)
             newGame.host = player
+             
             ongoingGames.push(newGame)
             const createInfo = {
                 type: "gameCreated",
                 message: "game has started"
             }
             socket.write(JSON.stringify(createInfo))
+                console.log(`data sent: ${createInfo}`)
             return
         }
 
@@ -60,11 +67,13 @@ server.on('connection', async (socket) => {
                 list: gamesList
             }
             socket.write(JSON.stringify(gamesInfo))
+            console.log(`data sent: ${gamesInfo}`)
+
             return
         }
         // joinRoom or inspectRoom
         if (type === "joinRoom") {
-            const { gameRoom } = data
+            const { gameRoom } = JSON.parse(data)
             const game = returnGame(gameRoom)
             if (!game) {
                 socket.destroy()
@@ -73,6 +82,7 @@ server.on('connection', async (socket) => {
             }
 
             const player: Player = {
+                id,
                 socket,
                 symbol: 'O'
             }
@@ -81,7 +91,7 @@ server.on('connection', async (socket) => {
         }
 
         if (type === "inspectRoom") {
-            const {gameRoom} = data
+            const {gameRoom} = JSON.parse(data)
 
             const game = returnGame(gameRoom)
             if (!game) {
@@ -89,7 +99,12 @@ server.on('connection', async (socket) => {
                 return
             }
 
-            const isAdded = game.addSpectator(socket)
+            const spectator:Spectator = {
+                id,
+                socket
+            }
+
+            const isAdded = game.addSpectator(spectator)
             if (isAdded) {
                 const spectatorJoinInfo = {
                     type: "spectatorJoin",
@@ -100,6 +115,7 @@ server.on('connection', async (socket) => {
                 // send all the players updated spectator count
                 game.players.forEach(player => {
                     player.socket.write(JSON.stringify(spectatorJoinInfo))
+                    console.log(`data sent: ${spectatorJoinInfo}`)  
                 })
 
                 //send spectator the currant board state
@@ -108,6 +124,8 @@ server.on('connection', async (socket) => {
                     boardState: game.board
                 }
                 socket.write(JSON.stringify(boardStateMsg))
+                console.log(`data sent: ${boardStateMsg}`)
+                
             } else {
                 console.log(`${game.gameName}: couldn't add the spectator`)
                 return
@@ -116,11 +134,11 @@ server.on('connection', async (socket) => {
         }
 
         if (type === "alias") {
-            const {gameRoom, message: playerName} = data
+            const {gameRoom, message: playerName} = JSON.parse(data)
 
             // get the gameRoom of the player and update their name
             const game = returnGame(gameRoom)
-            const player = returnPlayer(game, socket)
+            const player = returnPlayer(game, id)
 
             if (!(game && player)) {
                 console.error("couldn't find the Game or the player")
@@ -138,14 +156,19 @@ server.on('connection', async (socket) => {
             // if host just send them back their own joinInfo
             if (game.host.name === player.name) {
                 player.socket.write(JSON.stringify(joinInfo))
+                console.log(`data sent: ${joinInfo}`)
                 return
             }
 
             // if opponent then send opponent both the host and the opponent the joinInfo
             // sending opponent their own info - first time
             player.socket.write(JSON.stringify(joinInfo))
+            console.log(`data sent: ${joinInfo}`)
+
             // sending host the - second time
             game.host.socket.write(JSON.stringify(joinInfo))
+            console.log(`data sent: ${joinInfo}`)
+
             // sending opponent the host info -second time
             const hostInfo = {
                 type: "join",
@@ -153,14 +176,16 @@ server.on('connection', async (socket) => {
                 playerSymbol: game.host.symbol
             }
             player.socket.write(JSON.stringify(hostInfo))
+            console.log(`data sent: ${joinInfo}`)
+
             return
         }
 
         if (type === "chat") {
-            const {message, gameRoom} = data
+            const {message, gameRoom} = JSON.parse(data)
 
             const game = returnGame(gameRoom)
-            const player = returnPlayer(game, socket)
+            const player = returnPlayer(game, id)
 
             if (!(game && player)) {
                 console.error("couldn't find the Game or the player")
@@ -176,15 +201,16 @@ server.on('connection', async (socket) => {
             game.players.forEach(p => {
                 p.socket.write(JSON.stringify(chatInfo))
             })
+
             console.log(`in ${game.gameName}\n${player.name}: ${message}`)
             return
         }
 
         if (type === "move") {
-            const {row, col, gameRoom} = data.message
+            const {row, col, gameRoom} = JSON.parse(data).message
 
             const game = returnGame(gameRoom)
-            const player = returnPlayer(game, socket)
+            const player = returnPlayer(game, id)
 
             if (!(game && player)) {
                 console.error("couldn't find the Game or the player")
@@ -217,10 +243,10 @@ server.on('connection', async (socket) => {
         }
 
         if (type === "restart") {
-            const {message: isRestart, gameRoom} = data
+            const {message: isRestart, gameRoom} = JSON.parse(data)
 
             const game = returnGame(gameRoom)
-            const player = returnPlayer(game, socket)
+            const player = returnPlayer(game, id)
 
             if (!(game && player)) {
                 console.error("couldn't find the Game or the player")
@@ -229,6 +255,7 @@ server.on('connection', async (socket) => {
 
             if (!isRestart) {
                 socket.destroy()
+                
                 console.log(`${game.gameName}\n${player.name} has been kicked out of the game`)
             }
         }
@@ -240,7 +267,7 @@ server.on('connection', async (socket) => {
         let game: GameSession | undefined
 
         for (const g of ongoingGames) {
-            player = returnPlayer(g, socket) 
+            player = returnPlayer(g, id) 
             if (player) {
                 game = g
                 break
@@ -252,16 +279,17 @@ server.on('connection', async (socket) => {
             // get the game where the spectator is present
             for (const g of ongoingGames) {
                 for (const sp of g.spectators) {
-                    if (sp.remoteAddress === socket.remoteAddress) {
+                    if (sp.id === id) {
                         game = g
+                        break
                     }
                 }
             }
-
+            
             // update the spectator list
             if (game) {
                 console.log(`${game.gameName}: a spectator left the game`)
-                game.spectators = game.spectators.filter(sp => sp.remoteAddress !== socket.remoteAddress)
+                game.spectators = game.spectators.filter(sp => sp.id !== id)
                 const spectatorLeftInfo = {
                     type: "spectatorLeft",
                     count: game.spectators.length,
@@ -269,6 +297,8 @@ server.on('connection', async (socket) => {
                 game.players.forEach((player) => {
                     player.socket.write(JSON.stringify(spectatorLeftInfo))
                 })
+                console.log(`data sent: ${spectatorLeftInfo}`)
+
             } else {
                 console.error(`i have no idea who just left`)
             }
@@ -294,8 +324,9 @@ server.on('connection', async (socket) => {
             }
             game.players[0].socket.write(JSON.stringify(closeInfo))
             game.spectators.forEach(sp => {
-                sp.write(JSON.stringify(closeInfo))
+                sp.socket.write(JSON.stringify(closeInfo))
             })
+            console.log(`data sent: ${closeInfo}`)
             game.resetGame()
         } else {
             // both the players left the game
@@ -310,8 +341,9 @@ server.on('connection', async (socket) => {
                     message: "current game has ended"
                 }
                 game.spectators.forEach(sp => {
-                    sp.write(JSON.stringify(gameEndSpec))
+                    sp.socket.write(JSON.stringify(gameEndSpec))
                 })
+                console.log(`data sent: ${gameEndSpec}`)
             }
         }
     })
@@ -333,12 +365,16 @@ const returnGame = (gameName: string): GameSession | undefined => {
     return undefined
 }
 
-const returnPlayer = (gameRoom: GameSession | undefined, ip: net.Socket): Player | undefined => {
+const returnPlayer = (gameRoom: GameSession | undefined, id: string): Player | undefined => {
     if (gameRoom) {
-        return gameRoom.players.find(p => p.socket.remoteAddress === ip.remoteAddress)
+        return gameRoom.players.find(p => p.id === id)
     } else {
         return undefined
     }
+}
+
+const generateUniqueId = (): string => {
+    return Math.random().toString(36).substring(2, 9)
 }
 
 // Start the server
