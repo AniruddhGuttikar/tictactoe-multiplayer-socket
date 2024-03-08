@@ -173,13 +173,15 @@ server.on('connection', async (socket) => {
             console.log('data sent: ', joinInfo)
 
             // sending opponent the host info -second time
-            const hostInfo = {
-                type: "join",
-                user: game.host.name,
-                playerSymbol: game.host.symbol
-            }
-            player.socket.write(JSON.stringify(hostInfo))
-            console.log('data sent: ', joinInfo)
+            setTimeout(() => {
+                const hostInfo = {
+                    type: "join",
+                    user: game.host.name,
+                    playerSymbol: game.host.symbol
+                }
+                player.socket.write(JSON.stringify(hostInfo))
+                console.log('data sent: ', hostInfo)
+            }, 1000)
 
             return
         }
