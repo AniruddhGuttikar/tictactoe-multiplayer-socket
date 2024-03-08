@@ -21,7 +21,7 @@ server.on('connection', async (socket) => {
     const id: string = generateUniqueId()
 
     socket.on('data', async (data: any) => {
-        console.log(`data received ${JSON.parse(data)}`)
+        console.log('data received: ',JSON.parse(data))
         const { type } = JSON.parse(data)
 
         if (type === "createGame") {
@@ -35,7 +35,7 @@ server.on('connection', async (socket) => {
                     message: "game name already exists"
                 }
                 socket.write(JSON.stringify(nameError))
-                console.log(`data sent: ${nameError}`)
+                console.log('data sent: ', nameError)
                 return
             }
             const player: Player = {
@@ -52,7 +52,7 @@ server.on('connection', async (socket) => {
                 message: "game has started"
             }
             socket.write(JSON.stringify(createInfo))
-                console.log(`data sent: ${createInfo}`)
+                console.log('data sent: ',createInfo)
             return
         }
 
@@ -67,7 +67,8 @@ server.on('connection', async (socket) => {
                 list: gamesList
             }
             socket.write(JSON.stringify(gamesInfo))
-            console.log(`data sent: ${gamesInfo}`)
+            console.log('data sent: ', gamesInfo)
+
 
             return
         }
@@ -115,8 +116,8 @@ server.on('connection', async (socket) => {
                 // send all the players updated spectator count
                 game.players.forEach(player => {
                     player.socket.write(JSON.stringify(spectatorJoinInfo))
-                    console.log(`data sent: ${spectatorJoinInfo}`)  
                 })
+                console.log('data sent: ',spectatorJoinInfo) 
 
                 //send spectator the currant board state
                 const boardStateMsg = {
@@ -124,7 +125,8 @@ server.on('connection', async (socket) => {
                     boardState: game.board
                 }
                 socket.write(JSON.stringify(boardStateMsg))
-                console.log(`data sent: ${boardStateMsg}`)
+                console.log('data sent: ', boardStateMsg)
+
                 
             } else {
                 console.log(`${game.gameName}: couldn't add the spectator`)
@@ -156,18 +158,19 @@ server.on('connection', async (socket) => {
             // if host just send them back their own joinInfo
             if (game.host.name === player.name) {
                 player.socket.write(JSON.stringify(joinInfo))
-                console.log(`data sent: ${joinInfo}`)
+                console.log('data sent: ', joinInfo)
+
                 return
             }
 
             // if opponent then send opponent both the host and the opponent the joinInfo
             // sending opponent their own info - first time
             player.socket.write(JSON.stringify(joinInfo))
-            console.log(`data sent: ${joinInfo}`)
+            console.log('data sent: ', joinInfo)
 
             // sending host the - second time
             game.host.socket.write(JSON.stringify(joinInfo))
-            console.log(`data sent: ${joinInfo}`)
+            console.log('data sent: ', joinInfo)
 
             // sending opponent the host info -second time
             const hostInfo = {
@@ -176,7 +179,7 @@ server.on('connection', async (socket) => {
                 playerSymbol: game.host.symbol
             }
             player.socket.write(JSON.stringify(hostInfo))
-            console.log(`data sent: ${joinInfo}`)
+            console.log('data sent: ', joinInfo)
 
             return
         }
@@ -297,7 +300,7 @@ server.on('connection', async (socket) => {
                 game.players.forEach((player) => {
                     player.socket.write(JSON.stringify(spectatorLeftInfo))
                 })
-                console.log(`data sent: ${spectatorLeftInfo}`)
+                console.log('data sent: ', spectatorLeftInfo)
 
             } else {
                 console.error(`i have no idea who just left`)
@@ -326,7 +329,7 @@ server.on('connection', async (socket) => {
             game.spectators.forEach(sp => {
                 sp.socket.write(JSON.stringify(closeInfo))
             })
-            console.log(`data sent: ${closeInfo}`)
+            console.log('data sent: ', closeInfo)
             game.resetGame()
         } else {
             // both the players left the game
@@ -343,7 +346,7 @@ server.on('connection', async (socket) => {
                 game.spectators.forEach(sp => {
                     sp.socket.write(JSON.stringify(gameEndSpec))
                 })
-                console.log(`data sent: ${gameEndSpec}`)
+                console.log('data sent: ', gameEndSpec)
             }
         }
     })
