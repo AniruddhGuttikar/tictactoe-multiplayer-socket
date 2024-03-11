@@ -98,6 +98,7 @@ export default class GameSession {
         for (const p of this.players) {
             p.socket.write(JSON.stringify(moveInfo))
         }
+        console.log("data sent: ", moveInfo)
         for (const s of this.spectators) {
             s.socket.write(JSON.stringify(moveInfo))
         }
