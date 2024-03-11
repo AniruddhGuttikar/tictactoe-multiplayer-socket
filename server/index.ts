@@ -212,7 +212,8 @@ server.on('connection', async (socket) => {
         }
 
         if (type === "move") {
-            const {row, col, gameRoom} = JSON.parse(data).message
+            const {row, col} = JSON.parse(data).message
+            const gameRoom = JSON.parse(data)
 
             const game = returnGame(gameRoom)
             const player = returnPlayer(game, id)
