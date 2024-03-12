@@ -92,7 +92,7 @@ server.on('connection', async (socket) => {
         }
 
         if (type === "inspectRoom") {
-            const {gameRoom} = JSON.parse(data)
+            const {message: gameRoom} = JSON.parse(data)
 
             const game = returnGame(gameRoom)
             if (!game) {
@@ -204,7 +204,9 @@ server.on('connection', async (socket) => {
             }
 
             game.players.forEach(p => {
-                p.socket.write(JSON.stringify(chatInfo))
+                if (p !== player) {
+                    p.socket.write(JSON.stringify(chatInfo))
+                }
             })
 
             console.log(`in ${game.gameName}\n${player.name}: ${message}`)
@@ -213,7 +215,7 @@ server.on('connection', async (socket) => {
 
         if (type === "move") {
             const {row, col} = JSON.parse(data).message
-            const gameRoom = JSON.parse(data)
+            const {gameRoom} = JSON.parse(data)
 
             const game = returnGame(gameRoom)
             const player = returnPlayer(game, id)
@@ -366,6 +368,7 @@ const returnGame = (gameName: string): GameSession | undefined => {
         if (game.gameName === gameName) {
             return game
         }
+        console.log("game: ", gameName)
     }
     console.error("game room not found")
     return undefined
