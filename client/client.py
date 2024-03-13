@@ -12,10 +12,6 @@ import speech_recognition as sr
 import cv2
 from PIL import Image, ImageTk
 from moviepy.editor import VideoFileClip
-import pynput
-import emoji
-import platform
-
 
 class FullscreenVideo(tk.Label):
     def __init__(self, master=None, video_path="", duration=7, **kwargs):
@@ -28,7 +24,6 @@ class FullscreenVideo(tk.Label):
 
         # Set up the Tkinter window
         self.master = master
-        self.master.attributes("-fullscreen", True)
 
         # Play the video with audio for the specified duration
         self.video_label = tk.Label(self)
@@ -217,10 +212,10 @@ class TicTacToeGame:
         self.window.after(0,self.animation3)
         try:
             #self.client.connect((i[1],3000))
-            self.client.connect(("192.168.0.111",3000))
-            #FullscreenVideo(self.window, video_path=self.video_file_path)
+            self.client.connect(("192.168.0.106",3000))
+            FullscreenVideo(self.window, video_path=self.video_file_path)
             pygame.mixer.init()
-            pygame.mixer.music.load('client\song.mp3')
+            pygame.mixer.music.load('client/song.mp3')
             pygame.mixer.music.set_volume(0.5)
             pygame.mixer.music.play()
             self.window.after(0,self.main)
@@ -441,7 +436,15 @@ class TicTacToeGame:
                 print("game room full")
                 messagebox.showwarning("game full","game full try some other")
                 if messagebox.askyesno("inspect?", "Do u want to inspect this game?"):
-                    self.window.after(0,self.inspect(selected_host))
+                    self.label_frame.destroy()
+                    self.label.destroy()
+                    self.left_button.destroy()
+                    self.start_button.destroy()
+                    self.right_button.destroy()
+                    self.right_button.destroy()
+                    self.shost=selected_host
+                    self.client.send(json.dumps({'type':'inspectRoom','message':selected_host}).encode('utf-8'))
+                    self.window.after(0,self.create_board,"spect")
                 else:
                     self.label_frame.destroy()
                     self.label.destroy()
@@ -494,105 +497,9 @@ class TicTacToeGame:
     def restore_placeholder(self, event):
         if not self.entry_alias.get():
             self.entry_alias.insert(0, 'Enter Alias Name')
-
-
-    def inspect(self,selected_host):
-        self.window.configure(bg='#333333')
-        self.client.send(json.dumps({'type':'inspectRoom','message':selected_host}).encode('utf-8'))
-        self.alias_label = tk.Label(self.window, font=('Arial', 12))
-        self.alias_label.grid(row=0, column=1, pady=(0, 10), sticky="nsew")
-        self.opponent_label = tk.Label(self.window, font=('Arial', 12))
-        self.opponent_label.grid(row=4, column=1, rowspan=2, sticky="nsew")
-        exit_button = tk.Button(self.window, text="Exit", command=self.on_exit_inspect, bg='#FF0000', fg='white',font=('Arial', 12))
-        exit_button.grid(row=6, column=0, pady=10, padx=5, sticky="nsew")
-        for i in range(3):
-            row_but = []
-            for j in range(3):
-                button = tk.Button(self.window, text="", font=("Arial", 50), anchor="center", height=2, width=6,
-                                bg="lightblue") #initially set the state as disabled 
-                button.grid(row=i + 1, column=j, sticky="nsew")
-                row_but.append(button)
-            self.buttons.append(row_but)
-
-        #revieve boardState and pront them.. type:boardState,board:[....] ,palyerX: name....}
         
-        # send {type: inspect status: start}     when game starts
-        def recieving():
-            try:
-                # Set the socket to non-blocking mode
-                self.client.setblocking(0)
-                self.data = b""
-                try:
-                    chunk = self.client.recv(1024)
-                    if chunk:
-                        self.data += chunk
-                except BlockingIOError:
-                    pass 
-                if self.data:
-                    messages = self.data.decode('utf-8')
-                    json_array_string = f'[{messages.replace("}{", "},{")}]'
-                    messages=json.loads(json_array_string)
-
-                    for data in messages:
-                        if data['type']=='boardState':
-                            
-                            print("boardState: ",data['boardState'])
-                            for i in range(3):
-                                for j in range(3):
-                                    if data['boardState'][i][j]=='X':
-                                        self.buttons[i][j].config(text=data['boardState'][i][j], fg="red")
-                                    elif data['boardState'][i][j]:
-                                        self.buttons[i][j].config(text=data['boardState'][i][j], fg="blue")
-                                    else:
-                                        self.buttons[i][j].config(text="")
-                            self.alias_label.config(text=f"payer1 : {data['playerX']}")
-                            self.opponent_label_label.config(text=f"payer2 : {data['playerO']}")        
-                                
-                        if data['type']=='move':
-                            if data['playerSymbol']=='X':
-                                color='red'
-                            else:
-                                color='blue'
-                            self.buttons[data['row']][data['col']].config(text=data['playerSymbol'], fg=color)
-                        if data['type']=='gameEnd':
-                                center_frame = tk.LabelFrameFrame(self.window, bg='#A9A9A9')
-                                center_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
-                                label=tk.Label(center_frame,text="player "+data['winAlias']+ "wins", width=30, font=('Arial', 16))
-                                label.pack(pady=20)
-                                time.sleep(2)
-                                center_frame.destroy()
-                                label.destroy()
-                                #reset all positions
-                                for i in range(3):
-                                    for j in range(3):
-                                        self.buttons[i][j].config(text="")
-
-                        #when a player joins send both players username to inspect part...only
-                        if data['type']=='nameLabel':
-                            self.alias_label.config(text=f"payer1 : {data['player1']}")
-                            self.opponent_label_label.config(text=f"payer2 : {data['player2']}")
-
-                        if data['type']=="exit":  #when both players exit
-                            #destry everything
-                            self.alias_label.destroy()
-                            self.opponent_label.destroy()
-                            self.exit_button.destroy()
-                            for i in range(3):
-                                for j in range(3):
-                                    self.buttons[i][j].destroy()
-                            #disconnect from the server:     
-                            self.window.after(0,self.main)
-
-            except Exception as e:
-                import traceback
-                import sys
-                traceback.print_exc()
-                print("Something went wrong at line {}: {}".format(sys.exc_info()[-1].tb_lineno, str(e)))
-            self.window.after(0,recieving)    
-        recieving()          
-
     def on_exit_inspect(self):
-        self.client.send(json.dumps({'type':'inspectExit'}))
+        self.client.send(json.dumps({'type':'inspectExit'}).encode('utf-8'))
         self.alias_label.destroy()
         self.opponent_label.destroy()
         self.exit_button.destroy()
@@ -716,12 +623,13 @@ class TicTacToeGame:
             print(f"An error occurred: {str(e)}")
 #-------------------------------------------------------------------------------------------------------------------------------#
     #playig area
-    def create_board(self):
+    def create_board(self,event=None):
         try:
             print("creating board")
             print("now im here")          
             print("in after process :)")
             spectcount=0
+
             self.eye_label = tk.Label(self.window, text=f"👁️ {spectcount}", font=('Arial', 20))
             self.eye_label.grid(row=0, column=0, sticky="nsew")
             self.alias_label = tk.Label(self.window, text=f'Your Alias: {self.alias}', font=('Arial', 12))
@@ -730,25 +638,133 @@ class TicTacToeGame:
             self.opponent_label.grid(row=4, column=1, rowspan=2, sticky="nsew")
             self.nameLabel=tk.Label(self.window,font=('Arial',21))
             self.nameLabel.grid(row=4,column=2, sticky='nsew')
-            for i in range(3):
-                row_but = []
-                for j in range(3):
-                    button = tk.Button(self.window, text="", font=("Arial", 50), anchor="center", height=2, width=6,
-                                    bg="lightblue", command=lambda row=i, col=j: self.handle_click(row, col)) #initially set the state as disabled 
-                    button.grid(row=i + 1, column=j, sticky="nsew")
-                    row_but.append(button)
-                self.buttons.append(row_but)
-            self.create_chatroom(self.window)
-            
-            messagebox.showinfo('info', f'You are playing with {self.opponent}')
-            exit_button = tk.Button(self.window, text="Exit", command=self.on_exit, bg='#FF0000', fg='white',font=('Arial', 12))
-            exit_button.grid(row=6, column=0, pady=10, padx=5, sticky="nsew")
-            if self.mySymbol!='X':
-                self.nameLabel.config(text="Your play",fg="red")
-            else:    
-                self.nameLabel.config(text="opponents play",fg="blue") # Pass the callback function to process   
+            print("event is :",event)
+
+            #if specator is invoked
+            if event=="spect":
+                print("inside spect event")
+                for i in range(3):
+                    row_but = []
+                    for j in range(3):
+                        button = tk.Button(self.window, text="", font=("Arial", 50), anchor="center", height=2, width=6,
+                                        bg="lightblue") #initially set the state as disabled 
+                        button.grid(row=i + 1, column=j, sticky="nsew")
+                        row_but.append(button)
+                    self.buttons.append(row_but)
+
+                
+                
+                messagebox.showinfo('info', f'You are playing with {self.opponent}')
+                exit_button = tk.Button(self.window, text="Exit", command=self.on_exit_inspect, bg='#FF0000', fg='white',font=('Arial', 12))
+                exit_button.grid(row=6, column=0, pady=10, padx=5, sticky="nsew")
+                def recieving():
+                    try:
+                        # Set the socket to non-blocking mode
+                        self.client.setblocking(0)
+                        self.data = b""
+                        try:
+                            chunk = self.client.recv(1024)
+                            if chunk:
+                                self.data += chunk
+                        except BlockingIOError:
+                            pass 
+                        if self.data:
+                            messages = self.data.decode('utf-8')
+                            json_array_string = f'[{messages.replace("}{", "},{")}]'
+                            messages=json.loads(json_array_string)
+                            
+                            for data in messages:
+                                print("\n\n\n\n\n *****************************\n recieved data:",data)
+                                if data['type']=='boardState':
+                                    
+                                    print("boardState: ",data['boardState'])
+                                    for i in range(3):
+                                        for j in range(3):
+                                            if data['boardState'][i][j]=='X':
+                                                self.buttons[i][j].config(text=data['boardState'][i][j], fg="red")
+                                            elif data['boardState'][i][j]=='O':
+                                                self.buttons[i][j].config(text=data['boardState'][i][j], fg="blue")
+                                    self.window.update()
+                                    self.alias_label.config(text=f"payerX : {data['playerX']}")
+                                    self.opponent_label.config(text=f"payerO : {data['playerY']}")        
+                                        
+                                if data['type']=='move':
+                                    print("im updating")
+                                    if data['playerSymbol']=='X':
+                                        color='red'
+                                        self.buttons[data['row']][data['col']].config(text=data['playerSymbol'], fg=color)
+                                    elif data['playerSymbol']=='O':
+                                        color='blue'
+                                        self.buttons[data['row']][data['col']].config(text=data['playerSymbol'], fg=color)
+                                    self.window.update()
+                                if data['type']=='gameEnd':    
+                                        print("in game end of inspect")
+                                        self.buttons[data['winSeq']['row1']][data['winSeq']['col1']].config(bg="green")
+                                        self.buttons[data['winSeq']['row2']][data['winSeq']['col2']].config(bg="green")
+                                        self.buttons[data['winSeq']['row3']][data['winSeq']['col3']].config(bg="green")
+        
+                                        center_frame = tk.LabelFrame(self.window, bg='#A9A9A9')
+                                        center_frame.place(relx=0.5, rely=0.5, anchor=tk.CENTER)
+                                        label=tk.Label(center_frame,text="player "+data['winAlias']+ "wins", width=30, font=('Arial', 16))
+                                        label.pack(pady=20)
+                                        time.sleep(2)
+                                        center_frame.destroy()
+                                        label.destroy()
+                                        #reset all positions
+                                        for i in range(3):
+                                            for j in range(3):
+                                                self.buttons[i][j].config(text="",bg='lightblue')
+                                        self.window.update()
+                                #when a player joins send both players username to inspect part...only
+                                if data['type']=='nameLabel':
+                                    self.alias_label.config(text=f"payer1 : {data['player1']}")
+                                    self.opponent_label_label.config(text=f"payer2 : {data['player2']}")
+
+                                if data['type']=="exit":  #when both players exit
+                                    #destry everything
+                                    self.alias_label.destroy()
+                                    self.opponent_label.destroy()
+                                    self.exit_button.destroy()
+                                    for i in range(3):
+                                        for j in range(3):
+                                            self.buttons[i][j].destroy()
+                                    #disconnect from the server:  
+                                    self.window.update()   
+                                    self.window.after(0,self.main)
+
+                    except Exception as e:
+                        import traceback
+                        import sys
+                        traceback.print_exc()
+                        print("Something went wrong at line {}: {}".format(sys.exc_info()[-1].tb_lineno, str(e)))
+                    self.window.after(0,recieving)    
+                recieving()                    
+
+
+            elif event==None:    
+                for i in range(3):
+                    row_but = []
+                    for j in range(3):
+                        button = tk.Button(self.window, text="", font=("Arial", 50), anchor="center", height=2, width=6,
+                                        bg="lightblue", command=lambda row=i, col=j: self.handle_click(row, col)) #initially set the state as disabled 
+                        button.grid(row=i + 1, column=j, sticky="nsew")
+                        row_but.append(button)
+                    self.buttons.append(row_but)
+                self.create_chatroom(self.window)
+                
+                messagebox.showinfo('info', f'You are playing with {self.opponent}')
+                exit_button = tk.Button(self.window, text="Exit", command=self.on_exit, bg='#FF0000', fg='white',font=('Arial', 12))
+                exit_button.grid(row=6, column=0, pady=10, padx=5, sticky="nsew")
+                if self.mySymbol!='X':
+                    self.nameLabel.config(text="Your play",fg="red")
+                else:    
+                    self.nameLabel.config(text="opponents play",fg="blue") # Pass the callback function to process   
         except Exception as e:
             print(f"An error occurred during GUI update: {str(e)}")
+            import traceback
+            import sys
+            traceback.print_exc()
+            print("Something went wrong at line {}: {}".format(sys.exc_info()[-1].tb_lineno, str(e)))
     def handle_click(self,row,col):
         if self.client.fileno() == -1:
             print("Socket closed")
@@ -817,7 +833,7 @@ class TicTacToeGame:
                         else:
                             self.on_exit()  
                     else:
-                        messagebox.showinfo("Oops!! You Lost")
+                        messagebox.showinfo("Oops!!"," You Lost")
                         sp.con("Oops you lost it, better luck next time")
                         r=messagebox.askyesno("Restart","restart the game ?  ")
                         if r:
@@ -844,7 +860,7 @@ class TicTacToeGame:
         emoji_directory = 'client/emojis/'
 
         # Create emoji data with relative paths
-        emoji_data = [
+        self.emoji_data = [
             (emoji_directory + 'u0001f44a.png', '\U0001F44A'),
             (emoji_directory + 'u0001f44c.png', '\U0001F44C'),
             (emoji_directory + 'u0001f44d.png', '\U0001F44D'),
@@ -891,7 +907,7 @@ class TicTacToeGame:
         frame = ttk.Frame(self.root)
         frame.grid(row=0, column=0)
 
-        for i, (image_path, emoji) in enumerate(emoji_data):
+        for i, (image_path, emoji) in enumerate(self.emoji_data):
             row = i // 7
             col = i % 7
             button = ttk.Button(frame)
@@ -952,8 +968,6 @@ class TicTacToeGame:
 
     def send_message(self, event=None):
         message = self.message_entry.get().strip()
-        if self.root:
-            self.root.destroy()
         if message:
             self.client.send(json.dumps({'type': 'chat', 'message': message,'gameRoom':self.gameroom}).encode('utf-8'))
             self.chat_display.config(state='normal')
@@ -968,16 +982,13 @@ class TicTacToeGame:
 
     def on_entry_click(self, event):
         if self.message_entry.get() == "Type a message":
-            if self.root:
-                self.root.destroy()
-
+ 
             self.message_entry.delete(0, "end")
             self.send_button.config(command=self.send_message, text="➤")
             self.message_entry.config(fg="black")
 
     def on_focus_out(self, event):
-        if self.root:
-            self.root.destroy()
+
         if self.message_entry.get() == "":
             self.message_entry.insert(0, "Type a message")
             self.send_button.config(command=self.voiceMessage, text="🎤")
@@ -1069,9 +1080,9 @@ class TicTacToeGame:
                                     self.window.after(0,self.reset_board)
                                 else:
                                     self.on_exit()  
-                            else:
-                                messagebox.showinfo("Oops!!   You Lost")
-                                sp.con(":(","Oops you lost it, better luck next time")
+                            elif 'winAlias' in data and data['winAlias']!=self.alias:
+                                messagebox.showinfo("Oops!! ","  You Lost")
+                                sp.con("Oops you lost it, better luck next time")
                                 r=messagebox.askyesno("Restart","restart the game ?  ")
                                 if r:
                                     self.window.after(0,self.reset_board)
@@ -1101,7 +1112,10 @@ class TicTacToeGame:
                                                 print("Something went wrong:", str(e))
 
                         elif data['type']=='spectatorLeft':
-                            self.eye_label.config(text=f"👁️ {data['count']}")     
+                            self.eye_label.config(text=f"👁️ {data['count']}")  
+                        elif data['type']=='spectatorJoin':
+                            self.eye_label.config(text=f"👁️ {data['count']}") 
+                                   
 
             except Exception as e:
                 import traceback
