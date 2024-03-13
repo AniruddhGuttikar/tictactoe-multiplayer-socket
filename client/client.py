@@ -86,7 +86,7 @@ class TicTacToeGame:
         self.window.bind('<Key>', self.on_key_press)
         self.afk_threshold = 5
         self.last_activity_time = time.time()
-        self.video_file_path = "client/vedio.mp4"
+        self.video_file_path = "client/video.mp4"
         self.video_label = None
         self.video_thread_running = False
 
