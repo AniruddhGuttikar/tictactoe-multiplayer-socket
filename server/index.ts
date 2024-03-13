@@ -123,8 +123,8 @@ server.on('connection', async (socket) => {
                 const boardStateMsg = {
                     type: "boardState",
                     boardState: game.board,
-                    playerX: game.host.symbol,
-                    playerY: game.players[1].symbol,
+                    playerX: game.host.name,
+                    playerY: game.players[1].name,
                 }
                 socket.write(JSON.stringify(boardStateMsg))
                 console.log('data sent: ', boardStateMsg)
