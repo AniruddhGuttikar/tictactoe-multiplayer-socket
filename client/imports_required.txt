@@ -1,0 +1,19 @@
+
+
+1. ttkthemes: 
+   - Install with: pip install ttkthemes
+
+2. pygame: 
+   - Install with: pip install pygame
+
+3. speech_recognition: 
+   - Install with: pip install SpeechRecognition
+
+4. opencv-python: 
+   - Install with: pip install opencv-python
+
+5. Pillow: 
+   - Install with: pip install pillow
+
+6. moviepy: 
+   - Install with: pip install moviepy
