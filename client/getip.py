@@ -13,6 +13,7 @@ def get_connected_devices():
     # Create an ARP request packet to get the list of devices in the specified IP range
     ip_range=get_local_ip_range()
     arp_request = ARP(pdst=ip_range)
+    #for ipV6
     ether = Ether(dst="ff:ff:ff:ff:ff:ff")  # Broadcast Ethernet frame
     # Combine Ether and ARP packets
     packet = ether/arp_request
